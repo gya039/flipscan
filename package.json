@@ -1,0 +1,8 @@
+{
+  "name": "flipscan",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Snap a vintage item -> AI IDs it -> pulls comparable resale prices.",
+  "engines": { "node": ">=18" }
+}
