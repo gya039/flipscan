@@ -70,6 +70,7 @@ Return ONLY a JSON object (no prose, no markdown) with these keys:
     body: JSON.stringify({
       model: MODEL,
       max_tokens: 600,
+      temperature: 0, // deterministic — same photo gives the same read, not a different guess each scan
       messages: [{ role: "user", content: [...imgBlocks, { type: "text", text: prompt }] }],
     }),
   });
