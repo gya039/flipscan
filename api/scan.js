@@ -68,7 +68,7 @@ const IDENTITY_TOOL = {
       size: { type: "string", description: "Only if readable on the label, else 'unknown'." },
       condition_notes: { type: "string", description: "Visible flaws only (stains/holes/pilling/fading)." },
       notes: { type: "string", description: "One short line of resale insight: value drivers or what to double-check." },
-      search_query: { type: "string", description: "Concise eBay-style search for comparable listings: brand + item + era + key descriptor, no filler, no 'unknown'." },
+      search_query: { type: "string", description: "SHORT eBay-style search to find MANY comparable sold listings: about 3-5 words — brand + item type + at most ONE key descriptor. Drop colour, era and extra adjectives; a long/specific string matches too few listings. No 'unknown', no filler." },
       authenticity_flags: { type: "string", description: "Short note if anything looks fake/bootleg, else 'none'." },
       confidence: { type: "string", enum: ["high", "medium", "low"], description: "Overall confidence in the identification." },
       estimated_resale_eur: {

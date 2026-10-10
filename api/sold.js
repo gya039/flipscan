@@ -29,11 +29,15 @@ export default async function handler(req, res) {
     if (!process.env.SOLDCOMPS_API_KEY) return res.status(500).json({ error: "server_misconfigured" });
 
     const body = await readJson(req);
-    const query = String(body.query || "").replace(/\bunknown\b/gi, " ").replace(/\s+/g, " ").trim().slice(0, 200);
-    if (!query) return res.status(400).json({ error: "no_query" });
+    const raw = String(body.query || "").replace(/\bunknown\b/gi, " ").replace(/\s+/g, " ").trim().slice(0, 200);
+    if (!raw) return res.status(400).json({ error: "no_query" });
+    // Shorter query = more comps. Keep ~first 5 words (brand + item type + one descriptor).
+    const query = raw.split(/\s+/).slice(0, 5).join(" ");
 
     const ccy = SITE_CCY[SITE] || "GBP";
-    const url = `https://api.sold-comps.com/v1/scrape?sold=true&itemCondition=used&buyingFormat=buyItNow&count=120&ebaySite=${encodeURIComponent(SITE)}&keyword=${encodeURIComponent(query)}`;
+    // NOTE: no buyingFormat filter -> include auctions AND accepted-offer sales (they're
+    // all real sold prices). Filtering to Buy-It-Now only drops most used-clothing sales.
+    const url = `https://api.sold-comps.com/v1/scrape?sold=true&itemCondition=used&count=240&ebaySite=${encodeURIComponent(SITE)}&keyword=${encodeURIComponent(query)}`;
 
     let r;
     try { r = await fetchT(url, { headers: { Authorization: `Bearer ${process.env.SOLDCOMPS_API_KEY}` } }, 12000); }
