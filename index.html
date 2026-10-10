@@ -79,6 +79,8 @@
   .soldbtn{width:100%;margin-top:14px;background:var(--surface-2);border:1px solid var(--accent);color:var(--accent);border-radius:10px;padding:11px;font-weight:700;font-size:.9rem;cursor:pointer}
   .soldbtn small{font-weight:400;color:var(--faint);margin-left:6px}
   .soldbtn:disabled{opacity:.6}
+  .logbtn{width:100%;margin-top:10px;background:var(--surface-2);border:1px solid var(--line-strong);color:var(--ink);border-radius:10px;padding:11px;font-weight:700;font-size:.9rem;cursor:pointer}
+  .logbtn:disabled{opacity:.6}
 
   .links{margin-top:14px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
   .links a{text-align:center;text-decoration:none;font-weight:700;font-size:.82rem;padding:11px 6px;border-radius:10px;border:1px solid var(--line-strong);color:var(--ink);background:var(--surface-2)}
@@ -91,7 +93,7 @@
 <div class="wrap">
   <div class="head">
     <div><h1>Flip<span>Scan</span></h1><div class="sub">Snap or upload → is it worth it?</div></div>
-    <button class="gear" id="gear" title="Settings">⚙️</button>
+    <div><a class="gear" href="log.html" title="Log" style="text-decoration:none">📋</a><button class="gear" id="gear" title="Settings">⚙️</button></div>
   </div>
 
   <div class="settings" id="settings">
@@ -185,7 +187,7 @@ async function post(images){
   if(!res.ok || data.error) throw new Error(prettyErr(data.error) || ("HTTP "+res.status));
   return data;
 }
-function prettyErr(e){ return ({ identify_timeout:"the AI timed out — try again", identify_truncated:"the AI reply was cut off — try again", identify_failed:"couldn't read the photo", too_many_images:"max 5 photos per item", image_too_large:"a photo was too big", payload_too_large:"too much image data", bad_image_format:"unsupported image", unauthorized:"wrong access code", server_misconfigured:"app not configured (keys)", server_error:"server error", sold_quota:"monthly sold-lookups used up (resets next month)", sold_auth:"sold-price key invalid", sold_failed:"sold lookup failed", sold_timeout:"sold lookup timed out", no_query:"nothing to search" })[e] || e; }
+function prettyErr(e){ return ({ identify_timeout:"the AI timed out — try again", identify_truncated:"the AI reply was cut off — try again", identify_failed:"couldn't read the photo", too_many_images:"max 5 photos per item", image_too_large:"a photo was too big", payload_too_large:"too much image data", bad_image_format:"unsupported image", unauthorized:"wrong access code", server_misconfigured:"app not configured (keys)", server_error:"server error", sold_quota:"monthly sold-lookups used up (resets next month)", sold_auth:"sold-price key invalid", sold_failed:"sold lookup failed", sold_timeout:"sold lookup timed out", no_query:"nothing to search", log_not_configured:"scan log not set up (Upstash keys)" })[e] || e; }
 
 function resize(file,max,q){ return new Promise((res,rej)=>{ const img=new Image(); img.onload=()=>{ let {width:w,height:h}=img; if(Math.max(w,h)>max){ const r=max/Math.max(w,h); w=Math.round(w*r); h=Math.round(h*r);} const c=document.createElement("canvas"); c.width=w;c.height=h; c.getContext("2d").drawImage(img,0,0,w,h); res(c.toDataURL("image/jpeg",q)); }; img.onerror=rej; img.src=URL.createObjectURL(file); }); }
 function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
@@ -239,6 +241,7 @@ function renderCard(data, el, n){
   html += `<div class="paid"><label>What you paid</label>
     <div class="row"><span class="cur">€</span><input type="number" inputmode="decimal" placeholder="e.g. 6" /></div>
     <div class="verdict"></div></div>`;
+  html += `<button class="logbtn" type="button">💾 Log purchase</button>`;
   html += `<div class="links">
     <a href="https://www.ebay.co.uk/sch/i.html?_nkw=${q}&LH_Sold=1&LH_Complete=1" target="_blank" rel="noopener">eBay<small>sold</small></a>
     <a href="https://www.vinted.ie/catalog?search_text=${q}&order=price_high_to_low" target="_blank" rel="noopener">Vinted<small>listings</small></a>
@@ -286,6 +289,21 @@ function renderCard(data, el, n){
       soldBtn.style.display = "none";
       updateVerdict();
     } catch(e){ soldBtn.disabled=false; soldBtn.innerHTML = orig; alert(e.message); }
+  });
+
+  // Log a purchase to the history (Upstash). Captures estimate-at-scan + what you paid.
+  const logBtn = el.querySelector(".logbtn");
+  logBtn.addEventListener("click", async ()=>{
+    const paid = parseFloat(input.value);
+    logBtn.disabled = true; logBtn.textContent = "Saving…";
+    try {
+      const record = { brand:id.brand, item_type:id.item_type, era:id.era, confidence:id.confidence,
+        basis, est_eur: resaleEur!=null?Math.round(resaleEur):null, paid: isFinite(paid)?paid:null, bought:true };
+      const r = await fetch("/api/log",{ method:"POST", headers:{ "content-type":"application/json", "x-flipscan-secret":getSecret() }, body: JSON.stringify({ action:"save", record }) });
+      if(r.status===401){ localStorage.removeItem("flipscan_secret"); throw new Error("Access code rejected — scan again to re-enter."); }
+      const d = await r.json(); if(!r.ok || d.error) throw new Error(prettyErr(d.error) || "save failed");
+      logBtn.textContent = "✓ Logged — add the sold price later in 📋";
+    } catch(e){ logBtn.disabled=false; logBtn.textContent="💾 Log purchase"; alert(e.message); }
   });
 }
 </script>

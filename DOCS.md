@@ -292,4 +292,11 @@ On a comps failure it is `{ error: "comps_failed" }`; with no eBay keys it is `n
   estimate (`SELL_PLATFORM`). **Net-margin verdict** with editable fee/postage/packaging
   + a €5 profit floor. 1568px resize for readable labels. Low-confidence → label nudge.
 
+- **v0.6** — On-demand real SOLD prices via SoldComps (`/api/sold`, per-button to
+  protect the 100/mo free quota); verdict uses the sold median when loaded.
+- **v0.7** — Scan/purchase **log** (`/api/log` + `log.html`) on Upstash Redis: tap
+  "💾 Log purchase" to save the estimate-at-scan + what you paid; fill in the real
+  sold price later; the log page shows totals (spent / sold / net profit) and an
+  **estimate-accuracy** readout. This is the passive replacement for a formal test set.
+
 _Yan's personal reselling tool — separate from the Let's Get Nessie project it sits next to on disk._
