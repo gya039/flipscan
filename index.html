@@ -246,7 +246,7 @@ function renderCard(data, el, n){
   const useComps = c && !c.error && c.reliable && c.anchor!=null;
   if(useComps){
     cur=c.currency;
-    html += `<div class="band"><div class="band-h">Going for about this on eBay · ${c.count} found</div>
+    html += `<div class="band"><div class="band-h">${c.visual?"🔍 Visually similar on eBay":"Going for about this on eBay"} · ${c.count} found</div>
       <div class="band-row"><div class="band-med">${fmt(c.anchor,cur)}</div>
       <div class="band-lohi">a fair price to work off<br>most sit ${fmt(c.low,cur)}–${fmt(c.high,cur)}</div></div>`;
     if(c.examples&&c.examples.length) html += `<div class="examples">`+c.examples.map(ex=>`

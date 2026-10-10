@@ -12,6 +12,7 @@ const MAX_IMAGES = 5;
 const MAX_IMG_CHARS = 3_600_000;   // ~2.6MB per image (data-URL string length)
 const MAX_TOTAL_CHARS = 9_000_000; // ~6.5MB total
 const MIN_COMPS = 8;               // below this, comps are flagged unreliable
+const IMG_MIN = 3;                  // enough visual matches to prefer image search over keyword
 const CLOTHING_CAT = "11450";      // eBay "Clothing, Shoes & Accessories" (verify per marketplace)
 const MARKET_CCY = { EBAY_GB: "GBP", EBAY_IE: "EUR", EBAY_DE: "EUR", EBAY_FR: "EUR", EBAY_ES: "EUR", EBAY_IT: "EUR", EBAY_US: "USD" };
 
@@ -141,41 +142,68 @@ async function ebayAuth() {
   ebayToken = { value: data.access_token, exp: Date.now() + (data.expires_in - 60) * 1000 };
   return ebayToken.value;
 }
-async function ebaySearch(query, token, market, ccy) {
-  // used + fixed-price + clothing category; drop anything not in the marketplace currency.
-  const filter = encodeURIComponent("buyingOptions:{FIXED_PRICE},conditionIds:{3000}");
-  const url = `https://api.ebay.com/buy/browse/v1/item_summary/search?limit=50&category_ids=${CLOTHING_CAT}&filter=${filter}&q=${encodeURIComponent(query)}`;
-  const r = await fetchT(url, { headers: { Authorization: `Bearer ${token}`, "X-EBAY-C-MARKETPLACE-ID": market } }, 5000);
-  if (!r.ok) throw new Error(`eBay browse ${r.status}`);
-  const data = await r.json();
+const EBAY_FILTER = encodeURIComponent("buyingOptions:{FIXED_PRICE},conditionIds:{3000}"); // used + fixed-price
+function okItems(data, ccy) {
   return (data.itemSummaries || []).filter((i) => i.price && i.price.currency === ccy && !isNaN(parseFloat(i.price.value)));
 }
-async function getComps(cleanedQuery, fallbackQuery) {
+async function ebaySearch(query, token, market, ccy) {
+  // keyword search: used + fixed-price + clothing category; drop anything not in the marketplace currency.
+  const url = `https://api.ebay.com/buy/browse/v1/item_summary/search?limit=50&category_ids=${CLOTHING_CAT}&filter=${EBAY_FILTER}&q=${encodeURIComponent(query)}`;
+  const r = await fetchT(url, { headers: { Authorization: `Bearer ${token}`, "X-EBAY-C-MARKETPLACE-ID": market } }, 5000);
+  if (!r.ok) throw new Error(`eBay browse ${r.status}`);
+  return okItems(await r.json(), ccy);
+}
+async function ebaySearchByImage(b64, token, market, ccy) {
+  // TRUE reverse-image search: eBay ranks active listings by VISUAL similarity to the photo.
+  // Same filters so prices stay comparable to the keyword path. Image goes in the POST body (no data: prefix).
+  const url = `https://api.ebay.com/buy/browse/v1/item_summary/search_by_image?limit=50&category_ids=${CLOTHING_CAT}&filter=${EBAY_FILTER}`;
+  const r = await fetchT(url, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "X-EBAY-C-MARKETPLACE-ID": market, "content-type": "application/json" },
+    body: JSON.stringify({ image: b64 }),
+  }, 7000);
+  if (!r.ok) throw new Error(`eBay image ${r.status}`);
+  return okItems(await r.json(), ccy);
+}
+function summarise(items, ccy, market, used, matched) {
+  if (!items.length) return { source: matched === "image" ? "eBay image match" : "eBay active listings (asking)", visual: matched === "image", marketplace: market, query: used, count: 0, currency: ccy, reliable: false, low: null, anchor: null, median: null, high: null, examples: [] };
+  const prices = items.map((i) => parseFloat(i.price.value)).sort((a, b) => a - b);
+  const anchor = pct(prices, 30);
+  // examples: the 4 listings priced closest to the anchor
+  const examples = [...items].sort((a, b) => Math.abs(parseFloat(a.price.value) - anchor) - Math.abs(parseFloat(b.price.value) - anchor))
+    .slice(0, 4).map((i) => ({ title: i.title, price: `${i.price.value} ${i.price.currency}`, url: i.itemWebUrl, image: (i.image && i.image.imageUrl) || null, condition: i.condition || "" }));
+  return {
+    source: matched === "image" ? "eBay image match (visually similar)" : "eBay active listings (asking)",
+    visual: matched === "image", marketplace: market, query: used,
+    count: prices.length, currency: ccy, reliable: prices.length >= MIN_COMPS,
+    low: pct(prices, 10), anchor, median: pct(prices, 50), high: pct(prices, 90), examples,
+  };
+}
+async function getComps(cleanedQuery, fallbackQuery, imageB64) {
   if (!process.env.EBAY_CLIENT_ID || !process.env.EBAY_CLIENT_SECRET) return null;
-  if (!cleanedQuery) return null;
   const market = process.env.EBAY_MARKETPLACE || "EBAY_GB";
   const ccy = MARKET_CCY[market] || "GBP";
   const token = await ebayAuth();
 
+  // 1) Try TRUE image search first — matches on how the item actually LOOKS, not words.
+  let imageItems = [];
+  if (imageB64) {
+    try { imageItems = await ebaySearchByImage(imageB64, token, market, ccy); }
+    catch (e) { console.error("ebay image search:", e.message); }
+  }
+  if (imageItems.length >= IMG_MIN) return summarise(imageItems, ccy, market, "(image match)", "image");
+
+  // 2) Fall back to keyword search (with a broader retry) when image search is unavailable or too thin.
+  if (!cleanedQuery) return imageItems.length ? summarise(imageItems, ccy, market, "(image match)", "image") : null;
   let used = cleanedQuery;
   let items = await ebaySearch(cleanedQuery, token, market, ccy);
   if (items.length < MIN_COMPS && fallbackQuery && cleanQuery(fallbackQuery) && cleanQuery(fallbackQuery) !== cleanedQuery) {
     const broader = await ebaySearch(cleanQuery(fallbackQuery), token, market, ccy);
     if (broader.length > items.length) { items = broader; used = cleanQuery(fallbackQuery); }
   }
-  if (!items.length) return { source: "eBay active listings (asking)", marketplace: market, query: used, count: 0, currency: ccy, reliable: false, low: null, anchor: null, median: null, high: null, examples: [] };
-
-  const prices = items.map((i) => parseFloat(i.price.value)).sort((a, b) => a - b);
-  const anchor = pct(prices, 30);
-  // examples: the 4 listings priced closest to the anchor
-  const examples = [...items].sort((a, b) => Math.abs(parseFloat(a.price.value) - anchor) - Math.abs(parseFloat(b.price.value) - anchor))
-    .slice(0, 4).map((i) => ({ title: i.title, price: `${i.price.value} ${i.price.currency}`, url: i.itemWebUrl, image: (i.image && i.image.imageUrl) || null, condition: i.condition || "" }));
-
-  return {
-    source: "eBay active listings (asking)", marketplace: market, query: used,
-    count: prices.length, currency: ccy, reliable: prices.length >= MIN_COMPS,
-    low: pct(prices, 10), anchor, median: pct(prices, 50), high: pct(prices, 90), examples,
-  };
+  // If keyword also came back thin but image had a few, prefer the visual matches.
+  if (imageItems.length > items.length) return summarise(imageItems, ccy, market, "(image match)", "image");
+  return summarise(items, ccy, market, used, "keyword");
 }
 
 // ---- handler -------------------------------------------------------------
@@ -221,7 +249,8 @@ export default async function handler(req, res) {
     let comps = null;
     try {
       const cq = cleanQuery(identity.search_query);
-      comps = await getComps(cq, `${identity.brand} ${identity.item_type}`);
+      // parsed[0] is the primary photo — eBay matches comps to how it actually LOOKS.
+      comps = await getComps(cq, `${identity.brand} ${identity.item_type}`, parsed[0] && parsed[0].b64);
     } catch (e) {
       console.error("comps error:", e.message);
       comps = { error: "comps_failed" };

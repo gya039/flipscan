@@ -263,7 +263,10 @@ On a comps failure it is `{ error: "comps_failed" }`; with no eBay keys it is `n
 
 ## 14. Known limitations
 - Gives a **comparable range, not an exact match** — every used piece is unique.
-- Free eBay data is **asking prices**, not sold (the sold *link* bridges this).
+- Free eBay data is **asking prices**, not sold (the sold *link*/SoldComps bridge this).
+- Image-match comps need the **eBay keys**; without them it falls back to the AI estimate.
+- The **sold-price** lookup (SoldComps) is still **keyword**, not image — so it can be
+  looser than the image-matched "going for" range above it.
 - The AI estimate is a **guess**, not market data — only a fallback.
 - Vinted/Depop prices are **manual** (deep links), by design.
 - Brand/era accuracy drops without a readable **label** shot.
@@ -298,5 +301,12 @@ On a comps failure it is `{ error: "comps_failed" }`; with no eBay keys it is `n
   "💾 Log purchase" to save the estimate-at-scan + what you paid; fill in the real
   sold price later; the log page shows totals (spent / sold / net profit) and an
   **estimate-accuracy** readout. This is the passive replacement for a formal test set.
+- **v0.8** — **Reverse-image comps.** `getComps()` now calls eBay's
+  `search_by_image` (Browse API) with the primary photo FIRST, so the "going for"
+  range matches on how the item actually *looks*, not keywords; keyword search is
+  the fallback when image match is thin/unavailable. UI labels these "🔍 Visually
+  similar". NOTE: the SoldComps "what did it really sell for?" lookup stays
+  keyword-based — that provider has no image search. Also a visual redesign
+  (Space Grotesk/Inter, depth, glow, logo mark) and plainer human wording throughout.
 
 _Yan's personal reselling tool — separate from the Let's Get Nessie project it sits next to on disk._
