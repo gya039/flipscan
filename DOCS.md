@@ -83,9 +83,10 @@ So it's useful on day one with one key, and gets more accurate when you add eBay
 - **Capture:** one `<input type="file" accept="image/*" multiple>` — on a phone this
   offers **camera or gallery**, and takes **multiple** photos.
 - **Client-side resize (`resize()`):** every photo is drawn to a canvas, scaled so
-  the longest side is ~1024px, and re-encoded as JPEG q0.82. This keeps uploads
-  small (fast, cheap, and under Vercel's request-size limit) with no quality cost
-  for recognition.
+  the longest side is ~1568px, and re-encoded as JPEG q0.82. This keeps uploads
+  small (fast, cheap, under Vercel's request-size limit). 1568px (not a smaller size)
+  is chosen so small **care-label text stays readable** — fine for whole garments,
+  but labels need the extra resolution to read the brand/era.
 - **Two modes (shown when 2+ photos are added):**
   - **📸 One item** → all photos sent in **one** request → the AI uses every angle +
     the label together for a richer, single result.
@@ -112,8 +113,12 @@ So it's useful on day one with one key, and gets more accurate when you add eBay
   or a raw stream).
 - **`identify(images, note)`** — the core. Sends the photo(s) to **Claude Haiku**
   (`claude-haiku-4-5-20251001`, set in the `MODEL` constant) with:
-  - **`temperature: 0`** → deterministic: the same photo gives the same read, not a
-    different guess each scan.
+  - **`temperature: 0`** → far more *consistent* reads (not a different guess each
+    scan). Note: consistent is not the same as *identical* (vision models still have
+    minor non-determinism), and consistent is not the same as *correct*.
+  - **Forced tool call:** the model is made to call a `report_item` tool whose
+    `input_schema` IS the identity object, so the reply is always valid structured
+    JSON — no hand-parsing, no "reply got truncated" failures.
   - A long, structured prompt (the "avoid these mistakes" block, §8) + a strict
     schema (§10).
   - It returns **ONLY JSON**, which `parseModelJson()` extracts (tolerating stray
@@ -163,8 +168,12 @@ multi-upload is for.
 1. 🟢 **eBay sold comps** — the truth (what the item *actually sold for*). Not in the
    free API; reach it via the app's **"eBay sold" link**, or upgrade `getComps()`
    (see §13).
-2. 🟡 **eBay active listings** — what the free Browse API returns (asking prices).
-   Median of ~50 = a solid signal. This is the price band when eBay keys are set.
+2. 🟡 **eBay active listings** — what the free Browse API returns (**asking** prices,
+   which run high because overpriced stock sits unsold). The search is filtered to
+   *used + fixed-price + clothing*, dropped to the marketplace currency, and the
+   verdict uses a lower **30th-percentile "anchor"** (not the median) to offset the
+   asking-price skew. Comps are only trusted when there are **≥8** priced listings
+   (`reliable: true`); below that the app falls back to the AI estimate.
 3. 🟠 **AI estimate** — Claude's `estimated_resale_eur` range, a **learned prior** from
    training. It's a stable, educated *guess* (not RNG, thanks to temperature 0) — but
    it is **not live data**, has a knowledge cutoff, and should be treated as a
@@ -199,9 +208,12 @@ Every scan returns an `identity` object:
 | `authenticity_flags` | Fake/bootleg concern, or "none". |
 | `confidence` | "high" / "medium" / "low". |
 | `estimated_resale_eur` | `{ low, high }` — the AI's rough € resale range. |
+| `model_used` | Which model produced the result. |
 
-Plus a `comps` object when eBay keys are set: `{ source, count, currency, low,
-median, high, examples[] }`.
+Plus a `comps` object when eBay keys are set: `{ source, marketplace, query, count,
+currency, reliable, low, anchor, median, high, examples[] }` — where `anchor` is the
+30th-percentile price the verdict uses and `reliable` is `false` below 8 listings.
+On a comps failure it is `{ error: "comps_failed" }`; with no eBay keys it is `null`.
 
 ---
 
@@ -213,8 +225,9 @@ median, high, examples[] }`.
 - **AI:** Anthropic Messages API, Claude Haiku (vision).
 - **Comps:** eBay Browse API (OAuth2 client-credentials).
 - **Hosting:** Vercel (works equally on Firebase Hosting + one Cloud Function).
-- **Env vars:** `ANTHROPIC_API_KEY` (required), `EBAY_CLIENT_ID`,
-  `EBAY_CLIENT_SECRET`, `EBAY_MARKETPLACE` (optional).
+- **Env vars:** `FLIPSCAN_SECRET` (required — the shared access code) and
+  `ANTHROPIC_API_KEY` (required); `SELL_PLATFORM` (optional, default Vinted);
+  `EBAY_CLIENT_ID`, `EBAY_CLIENT_SECRET`, `EBAY_MARKETPLACE` (optional).
 - **Running cost:** Anthropic ≈ fractions of a cent per photo (Haiku); eBay API free
   tier is plenty; Vercel Hobby tier is free. Effectively free for personal use.
 
@@ -223,7 +236,12 @@ median, high, examples[] }`.
   (`.gitignore` covers `.env*`).
 - **Photos are resized in the browser** and sent once to the function; they are
   **not stored** anywhere — processed in-memory and discarded.
-- The function is same-origin with the page, so no CORS surface.
+- The endpoint is protected by a **shared access code** (`FLIPSCAN_SECRET`): the
+  client sends it in an `x-flipscan-secret` header and the function rejects anything
+  without it with `401` **before** spending any AI credit. (Same-origin / CORS does
+  *not* stop a direct POST — the secret does.) Set a monthly spend cap in the
+  Anthropic console as a backstop; add Vercel firewall rate-limiting if you want
+  belt-and-braces.
 
 ---
 
@@ -262,6 +280,13 @@ median, high, examples[] }`.
   "what you paid" → live buy/pass verdict.
 - **v0.3** — hardened recognition (the 8 guardrails); sleeve-length in `item_type`.
 - **v0.4** — AI resale estimate so the verdict works before eBay keys; `temperature:0`
-  for consistent, repeatable reads.
+  for consistent reads.
+- **v0.5** — Security (shared access code, image validation, size caps, note
+  sanitisation, no leaked upstream errors). Comps quality (used + fixed-price +
+  clothing filter, single currency, min-8 `reliable` gate, 30th-percentile `anchor`,
+  query cleaning, broaden-once, closest-to-anchor examples, 5s timeouts). Forced
+  tool-call JSON + truncation/timeout handling + estimate validation. Platform-specific
+  estimate (`SELL_PLATFORM`). **Net-margin verdict** with editable fee/postage/packaging
+  + a €5 profit floor. 1568px resize for readable labels. Low-confidence → label nudge.
 
 _Yan's personal reselling tool — separate from the Let's Get Nessie project it sits next to on disk._
