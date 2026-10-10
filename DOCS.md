@@ -165,9 +165,12 @@ multi-upload is for.
 ## 9. The pricing logic (and its honest limits)
 
 **The hierarchy, best to worst:**
-1. 🟢 **eBay sold comps** — the truth (what the item *actually sold for*). Not in the
-   free API; reach it via the app's **"eBay sold" link**, or upgrade `getComps()`
-   (see §13).
+1. 🟢 **eBay sold comps** — the truth (what the item *actually sold for*). Wired in
+   via the **"💷 Real sold price"** button (SoldComps, `/api/sold`), which pulls real
+   sold prices on demand. It's a **button, not automatic**, because the free plan is
+   only 100 lookups/month — so you spend one only on items you're seriously weighing.
+   When sold data loads, the verdict switches to the sold **median**. (The eBay "sold"
+   *link* remains as a free manual check.)
 2. 🟡 **eBay active listings** — what the free Browse API returns (**asking** prices,
    which run high because overpriced stock sits unsold). The search is filtered to
    *used + fixed-price + clothing*, dropped to the marketplace currency, and the

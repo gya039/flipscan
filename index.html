@@ -76,6 +76,9 @@
   .verdict small{display:block;font-weight:400;font-size:.74rem;opacity:.85;margin-top:3px}
   .verdict.go{background:#16331f;color:var(--good)} .verdict.ok{background:#3a3417;color:var(--warn)}
   .verdict.thin{background:#3a2a16;color:var(--amber)} .verdict.pass{background:#3a2020;color:var(--bad)}
+  .soldbtn{width:100%;margin-top:14px;background:var(--surface-2);border:1px solid var(--accent);color:var(--accent);border-radius:10px;padding:11px;font-weight:700;font-size:.9rem;cursor:pointer}
+  .soldbtn small{font-weight:400;color:var(--faint);margin-left:6px}
+  .soldbtn:disabled{opacity:.6}
 
   .links{margin-top:14px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
   .links a{text-align:center;text-decoration:none;font-weight:700;font-size:.82rem;padding:11px 6px;border-radius:10px;border:1px solid var(--line-strong);color:var(--ink);background:var(--surface-2)}
@@ -182,7 +185,7 @@ async function post(images){
   if(!res.ok || data.error) throw new Error(prettyErr(data.error) || ("HTTP "+res.status));
   return data;
 }
-function prettyErr(e){ return ({ identify_timeout:"the AI timed out — try again", identify_truncated:"the AI reply was cut off — try again", identify_failed:"couldn't read the photo", too_many_images:"max 5 photos per item", image_too_large:"a photo was too big", payload_too_large:"too much image data", bad_image_format:"unsupported image", unauthorized:"wrong access code", server_misconfigured:"app not configured (keys)", server_error:"server error" })[e] || e; }
+function prettyErr(e){ return ({ identify_timeout:"the AI timed out — try again", identify_truncated:"the AI reply was cut off — try again", identify_failed:"couldn't read the photo", too_many_images:"max 5 photos per item", image_too_large:"a photo was too big", payload_too_large:"too much image data", bad_image_format:"unsupported image", unauthorized:"wrong access code", server_misconfigured:"app not configured (keys)", server_error:"server error", sold_quota:"monthly sold-lookups used up (resets next month)", sold_auth:"sold-price key invalid", sold_failed:"sold lookup failed", sold_timeout:"sold lookup timed out", no_query:"nothing to search" })[e] || e; }
 
 function resize(file,max,q){ return new Promise((res,rej)=>{ const img=new Image(); img.onload=()=>{ let {width:w,height:h}=img; if(Math.max(w,h)>max){ const r=max/Math.max(w,h); w=Math.round(w*r); h=Math.round(h*r);} const c=document.createElement("canvas"); c.width=w;c.height=h; c.getContext("2d").drawImage(img,0,0,w,h); res(c.toDataURL("image/jpeg",q)); }; img.onerror=rej; img.src=URL.createObjectURL(file); }); }
 function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
@@ -232,6 +235,7 @@ function renderCard(data, el, n){
     html += `<div class="band"><div class="band-h">price estimate</div><div class="notes" style="font-style:normal">${txt}</div></div>`;
   }
 
+  html += `<button class="soldbtn" type="button">💷 Real sold price <small>uses 1 of 100/mo</small></button>`;
   html += `<div class="paid"><label>What you paid</label>
     <div class="row"><span class="cur">€</span><input type="number" inputmode="decimal" placeholder="e.g. 6" /></div>
     <div class="verdict"></div></div>`;
@@ -243,15 +247,13 @@ function renderCard(data, el, n){
   el.innerHTML = html;
 
   const input = el.querySelector(".paid input"), vEl = el.querySelector(".verdict");
-  input.addEventListener("input", ()=>{
+  function updateVerdict(){
     const cost = parseFloat(input.value);
     if(!cost || resaleEur==null){ vEl.style.display="none"; return; }
     const s = costs();
     const fees = resaleEur * (s.fee/100);
     const afterCosts = resaleEur - fees - s.post - s.pack;   // net resale value in hand
-    const net = afterCosts - cost;                            // net profit
-    const gross = resaleEur - cost;
-    const mult = afterCosts / cost;
+    const net = afterCosts - cost, gross = resaleEur - cost, mult = afterCosts / cost;
     let cls, label;
     if(net < s.floor){ cls="pass"; label=`🔴 Pass — under €${s.floor} net`; }
     else if(mult>=2.5){ cls="go"; label="🟢 Strong flip"; }
@@ -261,6 +263,29 @@ function renderCard(data, el, n){
     vEl.className="verdict "+cls; vEl.style.display="block";
     vEl.innerHTML = `${label} · €${Math.round(net)} net (${mult.toFixed(1)}×) <span style="opacity:.7">· €${Math.round(gross)} gross</span>
       <small>vs ${basis} ≈ €${Math.round(resaleEur)} · after ${s.fee}% fee + €${s.post} post + €${s.pack} pkg</small>`;
+  }
+  input.addEventListener("input", updateVerdict);
+
+  // On-demand real SOLD prices (SoldComps) — spends 1 of your 100/month.
+  const soldBtn = el.querySelector(".soldbtn");
+  soldBtn.addEventListener("click", async ()=>{
+    soldBtn.disabled = true; const orig = soldBtn.innerHTML; soldBtn.textContent = "Checking sold prices…";
+    try {
+      const r = await fetch("/api/sold", { method:"POST", headers:{ "content-type":"application/json", "x-flipscan-secret":getSecret() },
+        body: JSON.stringify({ query: id.search_query || [id.brand,id.item_type,id.era].filter(Boolean).join(" ") }) });
+      if(r.status===401){ localStorage.removeItem("flipscan_secret"); throw new Error("Access code rejected — scan again to re-enter."); }
+      const d = await r.json();
+      if(!r.ok || d.error) throw new Error(prettyErr(d.error) || "sold lookup failed");
+      if(!d.count){ soldBtn.disabled=false; soldBtn.textContent = "No sold comps found — try the eBay link"; return; }
+      const ccy = d.currency;
+      resaleEur = d.median * (RATE[ccy]||1); basis = `eBay SOLD (${d.count})`;
+      const bandEl = el.querySelector(".band");
+      bandEl.innerHTML = `<div class="band-h" style="color:var(--good)">✅ eBay SOLD · ${d.count} sales · ${esc((d.site||"").replace("ebay.",""))}</div>
+        <div class="band-row"><div class="band-med">${fmt(d.median,ccy)}</div><div class="band-lohi">sold range ${fmt(d.low,ccy)}–${fmt(d.high,ccy)}</div></div>`
+        + (d.examples&&d.examples.length ? `<div class="examples">`+d.examples.map(ex=>`<a class="ex" href="${esc(ex.url)}" target="_blank" rel="noopener">${ex.image?`<img src="${esc(ex.image)}" alt="">`:`<span style="width:42px"></span>`}<span class="t">${esc(ex.title)}</span><span class="p">${esc(ex.price)}</span></a>`).join("")+`</div>` : "");
+      soldBtn.style.display = "none";
+      updateVerdict();
+    } catch(e){ soldBtn.disabled=false; soldBtn.innerHTML = orig; alert(e.message); }
   });
 }
 </script>
