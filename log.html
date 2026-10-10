@@ -71,9 +71,9 @@ function render(records){
     <div class="t"><div class="n">${eur(spent)}</div><div class="l">spent</div></div>
     <div class="t"><div class="n">${eur(sold)}</div><div class="l">sold (${soldCount})</div></div>
     <div class="t"><div class="n ${realised>=0?'good':''}">${eur(realised)}</div><div class="l">net profit</div></div></div>`
-    + (errN ? `<div class="acc">🎯 Estimate accuracy: on ${errN} sold item(s), the tool's price was on average <b>${Math.round(errSum/errN*100)}% off</b> the real sold price.</div>` : "");
+    + (errN ? `<div class="acc">🎯 How close were we? On ${errN} sold item(s), our price was about <b>${Math.round(errSum/errN*100)}% off</b> what they actually went for.</div>` : "");
 
-  if(!records.length){ $("list").innerHTML = `<div class="empty">No purchases logged yet. Tap "💾 Log purchase" on a scan to start.</div>`; return; }
+  if(!records.length){ $("list").innerHTML = `<div class="empty">Nothing logged yet. After a scan, hit 💾 to save what you bought — then add the sell price here when it goes.</div>`; return; }
 
   $("list").innerHTML = records.map(r=>{
     const held = r.sold_eur==null || isNaN(r.sold_eur);

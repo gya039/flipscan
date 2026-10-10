@@ -72,7 +72,7 @@
   .paid .cur{color:var(--muted);font-weight:700}
   .paid input{flex:1;background:var(--surface-2);border:1px solid var(--line-strong);color:var(--ink);border-radius:10px;padding:11px 12px;font-size:1rem;font-weight:700}
   .paid input:focus{outline:2px solid var(--accent);outline-offset:1px;border-color:transparent}
-  .verdict{margin-top:10px;border-radius:10px;padding:11px 13px;font-size:.92rem;font-weight:800;display:none}
+  .verdict{margin-top:10px;border-radius:12px;padding:14px 15px;font-size:1.05rem;font-weight:800;display:none}
   .verdict small{display:block;font-weight:400;font-size:.74rem;opacity:.85;margin-top:3px}
   .verdict.go{background:#16331f;color:var(--good)} .verdict.ok{background:#3a3417;color:var(--warn)}
   .verdict.thin{background:#3a2a16;color:var(--amber)} .verdict.pass{background:#3a2020;color:var(--bad)}
@@ -92,36 +92,36 @@
 <body>
 <div class="wrap">
   <div class="head">
-    <div><h1>Flip<span>Scan</span></h1><div class="sub">Snap or upload → is it worth it?</div></div>
+    <div><h1>Flip<span>Scan</span></h1><div class="sub">Snap a piece — see what it's worth.</div></div>
     <div><a class="gear" href="log.html" title="Log" style="text-decoration:none">📋</a><button class="gear" id="gear" title="Settings">⚙️</button></div>
   </div>
 
   <div class="settings" id="settings">
-    <h3>Cost settings</h3>
-    <div class="note">Used to work out NET profit. Set these to your platform (Vinted: fee 0, buyer pays postage).</div>
-    <div class="srow"><label>Platform fee %</label><input id="sFee" type="number" inputmode="decimal"></div>
-    <div class="srow"><label>Postage you pay €</label><input id="sPost" type="number" inputmode="decimal"></div>
+    <h3>Your costs</h3>
+    <div class="note">We take these off the sale price to work out real profit. On Vinted the buyer pays postage, so leave that at 0.</div>
+    <div class="srow"><label>Selling fee %</label><input id="sFee" type="number" inputmode="decimal"></div>
+    <div class="srow"><label>Postage you cover €</label><input id="sPost" type="number" inputmode="decimal"></div>
     <div class="srow"><label>Packaging €</label><input id="sPack" type="number" inputmode="decimal"></div>
-    <div class="srow"><label>Min profit to bother €</label><input id="sFloor" type="number" inputmode="decimal"></div>
+    <div class="srow"><label>Don't bother under €</label><input id="sFloor" type="number" inputmode="decimal"></div>
     <button class="btn primary save" id="saveSettings">Save</button>
     <button class="btn ghost" id="resetCode">Change access code</button>
   </div>
 
   <label class="btn primary" for="file">📷 Add photos</label>
   <input id="file" type="file" accept="image/*" multiple>
-  <div class="hint">Camera or gallery. Add a close-up of the label — it dates the piece &amp; nails the brand.</div>
+  <div class="hint">Use the camera or your gallery. A close-up of the label helps — it tells us the brand and age.</div>
 
   <div class="thumbs" id="thumbs"></div>
   <div class="toggle" id="toggle" style="display:none">
-    <button id="mOne" class="on" data-mode="one-item">📸 One item<small>multiple angles</small></button>
-    <button id="mMany" data-mode="items">🗂️ Several items<small>one each</small></button>
+    <button id="mOne" class="on" data-mode="one-item">📸 One thing<small>a few angles of it</small></button>
+    <button id="mMany" data-mode="items">🗂️ Different things<small>one photo each</small></button>
   </div>
   <button class="btn primary" id="scan" style="display:none">Scan</button>
   <button class="btn ghost" id="clear" style="display:none">Clear</button>
 
   <div class="status" id="status"><span class="spin"></span><span id="statusText">Reading…</span></div>
   <div id="results"></div>
-  <footer>Comparable range, not an exact match. Verdict is NET (fees, postage, packaging) — tap the sold-listings links to confirm real prices.</footer>
+  <footer>Prices are a guide, not gospel — tap through to the real listings to be sure. The verdict already takes fees, postage and packaging off.</footer>
 </div>
 
 <script>
@@ -164,14 +164,14 @@ async function scan(){
   $("results").innerHTML=""; $("status").style.display="block";
   try {
     if(mode==="items" && files.length>1){
-      $("statusText").textContent = `Reading ${files.length} items…`;
+      $("statusText").textContent = `Looking at ${files.length} things…`;
       await Promise.all(files.map(async (img,i)=>{
         const card=document.createElement("div"); $("results").appendChild(card);
         try { renderCard(await post([img]), card, i+1); }
         catch(e){ card.className="err"; card.textContent=`Item ${i+1}: ${e.message}`; }
       }));
     } else {
-      $("statusText").textContent = files.length>1 ? "Reading item (all angles)…" : "Reading…";
+      $("statusText").textContent = files.length>1 ? "Looking at it…" : "Looking…";
       const card=document.createElement("div"); $("results").appendChild(card);
       renderCard(await post(files), card);
     }
@@ -212,32 +212,32 @@ function renderCard(data, el, n){
   if(chips.length) html += `<div class="chips">${chips.join("")}</div>`;
   if(id.notes) html += `<div class="notes">💡 ${esc(id.notes)}</div>`;
   if(id.authenticity_flags && id.authenticity_flags.toLowerCase()!=="none") html += `<div class="flag">⚠️ ${esc(id.authenticity_flags)}</div>`;
-  if(conf==="low") html += `<div class="nudge">📸 Low confidence — add a close-up of the brand/wash label and scan again for a sharper read.</div>`;
+  if(conf==="low") html += `<div class="nudge">📸 Not sure on this one — take a close-up of the label and scan it again.</div>`;
 
   // ---- decide what the verdict rests on ----
   let resaleEur=null, basis="", cur="EUR";
   const useComps = c && !c.error && c.reliable && c.anchor!=null;
   if(useComps){
     cur=c.currency;
-    html += `<div class="band"><div class="band-h">eBay asking · ${c.count} listings · ${esc((c.marketplace||"").replace("EBAY_",""))}</div>
+    html += `<div class="band"><div class="band-h">Going for about this on eBay · ${c.count} found</div>
       <div class="band-row"><div class="band-med">${fmt(c.anchor,cur)}</div>
-      <div class="band-lohi">buy-anchor · range ${fmt(c.low,cur)}–${fmt(c.high,cur)} · med ${fmt(c.median,cur)}</div></div>`;
+      <div class="band-lohi">a fair price to work off<br>most sit ${fmt(c.low,cur)}–${fmt(c.high,cur)}</div></div>`;
     if(c.examples&&c.examples.length) html += `<div class="examples">`+c.examples.map(ex=>`
       <a class="ex" href="${esc(ex.url)}" target="_blank" rel="noopener">${ex.image?`<img src="${esc(ex.image)}" alt="">`:`<span style="width:42px"></span>`}<span class="t">${esc(ex.title)}</span><span class="p">${esc(ex.price)}</span></a>`).join("")+`</div>`;
     html += `</div>`;
-    resaleEur = c.anchor * (RATE[cur]||1); basis = `eBay asking (anchor, ${c.count} listings)`;
+    resaleEur = c.anchor * (RATE[cur]||1); basis = `what they're asking`;
   } else {
     const e = id.estimated_resale_eur || {};
     const lo=Number(e.low)||0, hi=Number(e.high)||lo;
-    if(lo||hi){ resaleEur=(lo+hi)/2; basis="AI estimate"; }
+    if(lo||hi){ resaleEur=(lo+hi)/2; basis="a rough guess"; }
     const thin = c && !c.error && c.count>0 && !c.reliable;
     const txt = (lo||hi)
-      ? `AI estimate <b style="color:var(--accent)">€${lo||hi}–€${hi||lo}</b> <span style="color:var(--faint)">— ${thin?`only ${c.count} live listings, too few to trust`:"no live comps"}; verify via links</span>`
-      : (c&&c.error ? "Price lookup unavailable — use the links below." : "Add eBay keys for live comps — use the links below.");
-    html += `<div class="band"><div class="band-h">price estimate</div><div class="notes" style="font-style:normal">${txt}</div></div>`;
+      ? `Rough guess <b style="color:var(--accent)">€${lo||hi}–€${hi||lo}</b> <span style="color:var(--faint)">— ${thin?`only ${c.count} real listings, too few to trust`:"no real sales found yet"}. Check the links below.</span>`
+      : (c&&c.error ? "Couldn't check prices — use the links below." : "Tap “What did it really sell for?” or the links below for real numbers.");
+    html += `<div class="band"><div class="band-h">Rough price</div><div class="notes" style="font-style:normal">${txt}</div></div>`;
   }
 
-  html += `<button class="soldbtn" type="button">💷 Real sold price <small>uses 1 of 100/mo</small></button>`;
+  html += `<button class="soldbtn" type="button">💷 What did it really sell for? <small>1 of 100 this month</small></button>`;
   html += `<div class="paid"><label>What you paid</label>
     <div class="row"><span class="cur">€</span><input type="number" inputmode="decimal" placeholder="e.g. 6" /></div>
     <div class="verdict"></div></div>`;
@@ -258,33 +258,33 @@ function renderCard(data, el, n){
     const afterCosts = resaleEur - fees - s.post - s.pack;   // net resale value in hand
     const net = afterCosts - cost, gross = resaleEur - cost, mult = afterCosts / cost;
     let cls, label;
-    if(net < s.floor){ cls="pass"; label=`🔴 Pass — under €${s.floor} net`; }
-    else if(mult>=2.5){ cls="go"; label="🟢 Strong flip"; }
+    if(net < s.floor){ cls="pass"; label=`🔴 Leave it — under €${s.floor} profit`; }
+    else if(mult>=2.5){ cls="go"; label="🟢 Grab it"; }
     else if(mult>=1.6){ cls="ok"; label="🟡 Worth it"; }
-    else if(mult>=1.15){ cls="thin"; label="🟠 Thin margin"; }
-    else { cls="pass"; label="🔴 Pass — no room"; }
+    else if(mult>=1.15){ cls="thin"; label="🟠 A bit tight"; }
+    else { cls="pass"; label="🔴 Leave it — no room"; }
     vEl.className="verdict "+cls; vEl.style.display="block";
-    vEl.innerHTML = `${label} · €${Math.round(net)} net (${mult.toFixed(1)}×) <span style="opacity:.7">· €${Math.round(gross)} gross</span>
-      <small>vs ${basis} ≈ €${Math.round(resaleEur)} · after ${s.fee}% fee + €${s.post} post + €${s.pack} pkg</small>`;
+    vEl.innerHTML = `${label} — you'd keep about €${Math.round(net)} <span style="opacity:.7">(${mult.toFixed(1)}× your money)</span>
+      <small>sells for ~€${Math.round(resaleEur)} (${basis}), minus ${s.fee}% fee, €${s.post} postage, €${s.pack} packaging</small>`;
   }
   input.addEventListener("input", updateVerdict);
 
   // On-demand real SOLD prices (SoldComps) — spends 1 of your 100/month.
   const soldBtn = el.querySelector(".soldbtn");
   soldBtn.addEventListener("click", async ()=>{
-    soldBtn.disabled = true; const orig = soldBtn.innerHTML; soldBtn.textContent = "Checking sold prices…";
+    soldBtn.disabled = true; const orig = soldBtn.innerHTML; soldBtn.textContent = "Checking real sales…";
     try {
       const r = await fetch("/api/sold", { method:"POST", headers:{ "content-type":"application/json", "x-flipscan-secret":getSecret() },
         body: JSON.stringify({ query: id.search_query || [id.brand,id.item_type,id.era].filter(Boolean).join(" ") }) });
       if(r.status===401){ localStorage.removeItem("flipscan_secret"); throw new Error("Access code rejected — scan again to re-enter."); }
       const d = await r.json();
       if(!r.ok || d.error) throw new Error(prettyErr(d.error) || "sold lookup failed");
-      if(!d.count){ soldBtn.disabled=false; soldBtn.textContent = "No sold comps found — try the eBay link"; return; }
+      if(!d.count){ soldBtn.disabled=false; soldBtn.textContent = "No sales found — try the eBay link"; return; }
       const ccy = d.currency;
-      resaleEur = d.median * (RATE[ccy]||1); basis = `eBay SOLD (${d.count})`;
+      resaleEur = d.median * (RATE[ccy]||1); basis = `what it actually sold for`;
       const bandEl = el.querySelector(".band");
-      bandEl.innerHTML = `<div class="band-h" style="color:var(--good)">✅ eBay SOLD · ${d.count} sales · ${esc((d.site||"").replace("ebay.",""))}</div>
-        <div class="band-row"><div class="band-med">${fmt(d.median,ccy)}</div><div class="band-lohi">sold range ${fmt(d.low,ccy)}–${fmt(d.high,ccy)}</div></div>`
+      bandEl.innerHTML = `<div class="band-h" style="color:var(--good)">✅ Actually sold for this · ${d.count} recent sales</div>
+        <div class="band-row"><div class="band-med">${fmt(d.median,ccy)}</div><div class="band-lohi">most went for<br>${fmt(d.low,ccy)}–${fmt(d.high,ccy)}</div></div>`
         + (d.examples&&d.examples.length ? `<div class="examples">`+d.examples.map(ex=>`<a class="ex" href="${esc(ex.url)}" target="_blank" rel="noopener">${ex.image?`<img src="${esc(ex.image)}" alt="">`:`<span style="width:42px"></span>`}<span class="t">${esc(ex.title)}</span><span class="p">${esc(ex.price)}</span></a>`).join("")+`</div>` : "");
       soldBtn.style.display = "none";
       updateVerdict();
@@ -302,7 +302,7 @@ function renderCard(data, el, n){
       const r = await fetch("/api/log",{ method:"POST", headers:{ "content-type":"application/json", "x-flipscan-secret":getSecret() }, body: JSON.stringify({ action:"save", record }) });
       if(r.status===401){ localStorage.removeItem("flipscan_secret"); throw new Error("Access code rejected — scan again to re-enter."); }
       const d = await r.json(); if(!r.ok || d.error) throw new Error(prettyErr(d.error) || "save failed");
-      logBtn.textContent = "✓ Logged — add the sold price later in 📋";
+      logBtn.textContent = "✓ Saved — pop the sell price in later (📋)";
     } catch(e){ logBtn.disabled=false; logBtn.textContent="💾 Log purchase"; alert(e.message); }
   });
 }
