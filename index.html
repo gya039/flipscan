@@ -104,11 +104,12 @@
   .logbtn{width:100%;margin-top:10px;background:var(--surface-2);border:1px solid var(--line-strong);color:var(--ink);border-radius:12px;padding:12px;font-weight:700;font-size:.9rem;cursor:pointer;transition:border-color .15s}
   .logbtn:hover{border-color:var(--muted)}
   .logbtn:disabled{opacity:.6}
-  .lensbtn{width:100%;margin-top:14px;background:var(--surface-2);border:1px solid var(--line-strong);color:var(--ink);border-radius:12px;padding:12px;font-weight:700;font-size:.9rem;cursor:pointer;transition:border-color .15s}
-  .lensbtn:hover{border-color:var(--accent)}
-  .lensbtn:disabled{opacity:.6}
-  .lensresults{margin-top:12px}
-  .lensresults:empty{margin-top:0}
+  .lensbtn,.webbtn{width:100%;margin-top:10px;background:var(--surface-2);border:1px solid var(--line-strong);color:var(--ink);border-radius:12px;padding:12px;font-weight:700;font-size:.9rem;cursor:pointer;transition:border-color .15s}
+  .lensbtn{margin-top:14px}
+  .lensbtn:hover,.webbtn:hover{border-color:var(--accent)}
+  .lensbtn:disabled,.webbtn:disabled{opacity:.6}
+  .lensresults,.webresults{margin-top:12px}
+  .lensresults:empty,.webresults:empty{margin-top:0}
 
   .links{margin-top:14px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
   .links a{text-align:center;text-decoration:none;font-weight:700;font-size:.82rem;padding:12px 6px;border-radius:12px;border:1px solid var(--line-strong);color:var(--ink);background:var(--surface-2);transition:border-color .15s,transform .08s}
@@ -219,7 +220,7 @@ async function post(images){
   if(!res.ok || data.error) throw new Error(prettyErr(data.error) || ("HTTP "+res.status));
   return data;
 }
-function prettyErr(e){ return ({ identify_timeout:"the AI timed out — try again", identify_truncated:"the AI reply was cut off — try again", identify_failed:"couldn't read the photo", too_many_images:"max 5 photos per item", image_too_large:"a photo was too big", payload_too_large:"too much image data", bad_image_format:"unsupported image", unauthorized:"wrong access code", server_misconfigured:"app not configured (keys)", server_error:"server error", sold_quota:"monthly sold-lookups used up (resets next month)", sold_auth:"sold-price key invalid", sold_failed:"sold lookup failed", sold_timeout:"sold lookup timed out", no_query:"nothing to search", log_not_configured:"scan log not set up (Upstash keys)", lens_not_configured:"shop search not set up (SerpApi/Upstash keys)", lens_failed:"shop search failed", lens_timeout:"shop search timed out", lens_quota:"monthly shop-searches used up (resets next month)" })[e] || e; }
+function prettyErr(e){ return ({ identify_timeout:"the AI timed out — try again", identify_truncated:"the AI reply was cut off — try again", identify_failed:"couldn't read the photo", too_many_images:"max 5 photos per item", image_too_large:"a photo was too big", payload_too_large:"too much image data", bad_image_format:"unsupported image", unauthorized:"wrong access code", server_misconfigured:"app not configured (keys)", server_error:"server error", sold_quota:"monthly sold-lookups used up (resets next month)", sold_auth:"sold-price key invalid", sold_failed:"sold lookup failed", sold_timeout:"sold lookup timed out", no_query:"nothing to search", log_not_configured:"scan log not set up (Upstash keys)", lens_not_configured:"shop search not set up (SerpApi/Upstash keys)", lens_failed:"shop search failed", lens_timeout:"shop search timed out", lens_quota:"monthly shop-searches used up (resets next month)", web_not_configured:"reverse image search not set up (Vision key)", web_failed:"reverse image search failed", web_timeout:"reverse image search timed out" })[e] || e; }
 
 function resize(file,max,q){ return new Promise((res,rej)=>{ const img=new Image(); img.onload=()=>{ let {width:w,height:h}=img; if(Math.max(w,h)>max){ const r=max/Math.max(w,h); w=Math.round(w*r); h=Math.round(h*r);} const c=document.createElement("canvas"); c.width=w;c.height=h; c.getContext("2d").drawImage(img,0,0,w,h); res(c.toDataURL("image/jpeg",q)); }; img.onerror=rej; img.src=URL.createObjectURL(file); }); }
 function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
@@ -269,16 +270,8 @@ function renderCard(data, el, n, img){
     html += `<div class="band"><div class="band-h">Rough price</div><div class="notes" style="font-style:normal">${txt}</div></div>`;
   }
 
-  // ---- where else this item lives on the web (Google Vision reverse image) ----
-  const w = data.web;
-  if(w && (w.best_guess || (w.pages&&w.pages.length))){
-    html += `<div class="band"><div class="band-h">🌐 Spotted around the web</div>`;
-    if(w.best_guess) html += `<div class="notes" style="font-style:normal;margin-top:8px">Looks like <b>${esc(w.best_guess)}</b></div>`;
-    if(w.pages&&w.pages.length) html += `<div class="examples">`+w.pages.map(p=>`
-      <a class="ex" href="${esc(p.url)}" target="_blank" rel="noopener"><span class="t"><b>${esc(p.site)}</b><br><span style="color:var(--muted)">${esc(p.title)}</span></span>${p.full?`<span class="p" style="font-size:.62rem;color:var(--good)">exact</span>`:`<span class="p" style="font-size:.62rem;color:var(--faint)">similar</span>`}</a>`).join("")+`</div>`;
-    html += `</div>`;
-  }
   html += `<button class="lensbtn" type="button">🛍️ Find it in shops — with prices</button><div class="lensresults"></div>`;
+  html += `<button class="webbtn" type="button">🌐 Reverse image search the web</button><div class="webresults"></div>`;
 
   html += `<button class="soldbtn" type="button">💷 What did it really sell for? <small>1 of 100 this month</small></button>`;
   html += `<div class="paid"><label>What you paid</label>
@@ -350,6 +343,24 @@ function renderCard(data, el, n, img){
         + `</div>`;
       lensBtn.style.display="none";
     } catch(e){ lensBtn.disabled=false; lensBtn.innerHTML=o; alert(e.message); }
+  });
+
+  // On-demand reverse image search (Google Vision) — only runs when tapped.
+  const webBtn = el.querySelector(".webbtn"), webOut = el.querySelector(".webresults");
+  webBtn.addEventListener("click", async ()=>{
+    if(!img){ alert("No photo saved for this card — scan again to use this."); return; }
+    webBtn.disabled=true; const o=webBtn.innerHTML; webBtn.textContent="Searching the web…";
+    try {
+      const r = await fetch("/api/web",{ method:"POST", headers:{ "content-type":"application/json", "x-flipscan-secret":getSecret() }, body: JSON.stringify({ image: img }) });
+      if(r.status===401){ localStorage.removeItem("flipscan_secret"); throw new Error("Access code rejected — scan again to re-enter."); }
+      const d = await r.json();
+      if(!r.ok || d.error) throw new Error(prettyErr(d.error) || "reverse image search failed");
+      if((!d.pages || !d.pages.length) && !d.best_guess){ webBtn.disabled=false; webBtn.textContent="Nothing matched online — try a clearer photo"; return; }
+      webOut.innerHTML = `<div class="band-h" style="margin-bottom:8px">🌐 Spotted around the web</div>`
+        + (d.best_guess ? `<div class="notes" style="font-style:normal;margin-bottom:8px">Looks like <b>${esc(d.best_guess)}</b></div>` : "")
+        + (d.pages&&d.pages.length ? `<div class="examples">`+d.pages.map(p=>`<a class="ex" href="${esc(p.url)}" target="_blank" rel="noopener"><span class="t"><b>${esc(p.site)}</b><br><span style="color:var(--muted)">${esc(p.title)}</span></span>${p.full?`<span class="p" style="font-size:.62rem;color:var(--good)">exact</span>`:`<span class="p" style="font-size:.62rem;color:var(--faint)">similar</span>`}</a>`).join("")+`</div>` : `<div class="notes" style="font-style:normal">No exact source pages found.</div>`);
+      webBtn.style.display="none";
+    } catch(e){ webBtn.disabled=false; webBtn.innerHTML=o; alert(e.message); }
   });
 
   // Log a purchase to the history (Upstash). Captures estimate-at-scan + what you paid.

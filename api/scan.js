@@ -206,32 +206,8 @@ async function getComps(cleanedQuery, fallbackQuery, imageB64) {
   return summarise(items, ccy, market, used, "keyword");
 }
 
-// ---- 3. (optional) Google Vision web detection = reverse image search ----
-// Finds the SAME item across the whole web — brand site, boutiques, vintage shops,
-// other marketplaces — by matching the photo itself. Takes base64 directly; cheap.
-function hostOf(u) { try { return new URL(u).hostname.replace(/^www\./, ""); } catch { return ""; } }
-async function webDetect(b64) {
-  if (!process.env.GOOGLE_VISION_API_KEY || !b64) return null;
-  let r;
-  try {
-    r = await fetchT(`https://vision.googleapis.com/v1/images:annotate?key=${process.env.GOOGLE_VISION_API_KEY}`, {
-      method: "POST", headers: { "content-type": "application/json" },
-      body: JSON.stringify({ requests: [{ image: { content: b64 }, features: [{ type: "WEB_DETECTION", maxResults: 12 }] }] }),
-    }, 7000);
-  } catch (e) { console.error("vision timeout:", e.message); return null; }
-  if (!r.ok) { console.error("vision:", r.status, await r.text().catch(() => "")); return null; }
-  const w = (((await r.json()).responses || [])[0] || {}).webDetection || {};
-  const best = (w.bestGuessLabels || [])[0]?.label || null;
-  const entities = (w.webEntities || []).filter((e) => e.description && e.score > 0.2).slice(0, 5).map((e) => e.description);
-  const raw = (w.pagesWithMatchingImages || [])
-    .map((p) => ({ title: p.pageTitle || hostOf(p.url), url: p.url, site: hostOf(p.url), full: (p.fullMatchingImages || []).length > 0 }))
-    .filter((p) => p.url && p.site);
-  raw.sort((a, b) => (b.full ? 1 : 0) - (a.full ? 1 : 0)); // exact-image matches first
-  const seen = new Set(), pages = [];
-  for (const p of raw) { if (seen.has(p.site)) continue; seen.add(p.site); pages.push(p); if (pages.length >= 8) break; } // one per site = variety
-  if (!best && !pages.length && !entities.length) return null;
-  return { best_guess: best, entities, pages };
-}
+// NOTE: Google Vision reverse image search lives in api/web.js now — it's an
+// on-demand button, not part of every scan, so no auto-cost or weak labels.
 
 // ---- handler -------------------------------------------------------------
 export default async function handler(req, res) {
@@ -272,17 +248,17 @@ export default async function handler(req, res) {
       return res.status(502).json({ error: e.stage || "identify_failed" });
     }
 
-    // --- comps + web sources (optional; neither failure fails the scan) ---
-    const cq = cleanQuery(identity.search_query);
-    const primary = parsed[0] && parsed[0].b64;  // primary photo drives both image searches
-    const [compsR, webR] = await Promise.allSettled([
-      getComps(cq, `${identity.brand} ${identity.item_type}`, primary),   // eBay (image → keyword)
-      webDetect(primary),                                                 // Google Vision reverse image
-    ]);
-    const comps = compsR.status === "fulfilled" ? compsR.value : (console.error("comps error:", compsR.reason?.message), { error: "comps_failed" });
-    const web = webR.status === "fulfilled" ? webR.value : null;
+    // --- comps (optional; never fails the scan). eBay image → keyword fallback. ---
+    let comps = null;
+    try {
+      const cq = cleanQuery(identity.search_query);
+      comps = await getComps(cq, `${identity.brand} ${identity.item_type}`, parsed[0] && parsed[0].b64);
+    } catch (e) {
+      console.error("comps error:", e.message);
+      comps = { error: "comps_failed" };
+    }
 
-    return res.status(200).json({ identity, comps, web });
+    return res.status(200).json({ identity, comps });
   } catch (e) {
     console.error("handler error:", e);
     return res.status(500).json({ error: "server_error" });

@@ -309,10 +309,13 @@ On a comps failure it is `{ error: "comps_failed" }`; with no eBay keys it is `n
   keyword-based — that provider has no image search. Also a visual redesign
   (Space Grotesk/Inter, depth, glow, logo mark) and plainer human wording throughout.
 - **v0.9** — **Web-wide reverse image search** (find the exact item across the net):
-  - **"Spotted around the web"** — auto, every scan, via **Google Cloud Vision**
-    web detection (`GOOGLE_VISION_API_KEY`). Returns a best-guess name + links to
+  - **"Reverse image search the web"** — an on-demand BUTTON (`api/web.js`) via
+    **Google Cloud Vision** web detection (`GOOGLE_VISION_API_KEY`). Returns links to
     the sites hosting that item's image (brand site, boutiques, other marketplaces),
-    exact matches first. Cheap, takes the photo directly, dormant without a key.
+    exact matches first, plus a best-guess name ONLY when it's specific (≥2 words —
+    bare category words like "vest" are suppressed). Takes the photo directly, free
+    up to ~1,000/month, dormant without a key. On-demand (not per-scan) so a basic
+    item never burns a call or clutters the result with a weak label.
   - **"Find it in shops — with prices"** — on-demand button, via **SerpApi Google
     Lens** (`SERPAPI_KEY`, ~100 free/mo). Returns visual matches with **shop name +
     price** inline. Lens needs a public image URL, so `api/lens.js` stashes the photo
