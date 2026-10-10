@@ -48,7 +48,7 @@ Work carefully and AVOID these common mistakes that cost resellers money:
 
 Return ONLY a JSON object (no prose, no markdown) with these keys:
 "brand" (best guess, or "unknown"),
-"item_type" (e.g. "track jacket","fair isle jumper","Carhartt hoodie"),
+"item_type" (e.g. "long-sleeve floral top","track jacket","fair isle jumper"; include the sleeve length for tops when you can tell — short/long/3-4 sleeve),
 "era" (e.g. "1990s","Y2K","2000s","unknown"),
 "key_features" (short: colour, pattern, notable details),
 "size" (from the label if visible, else "unknown"),
@@ -56,7 +56,8 @@ Return ONLY a JSON object (no prose, no markdown) with these keys:
 "notes" (ONE short sentence of resale insight — what drives its value, what to double-check, or why it's desirable),
 "search_query" (a concise eBay-style search string to find comparable SOLD listings — brand + item + era + key descriptor, no filler),
 "authenticity_flags" (a short note if anything looks fake/bootleg, else "none"),
-"confidence" ("high","medium" or "low").`
+"confidence" ("high","medium" or "low"),
+"estimated_resale_eur" (an object {"low": integer, "high": integer} — your best estimate of the secondhand resale price range in EUR on Vinted/Depop/eBay in good condition; best-effort rough guide only).`
     + (note ? `\nSeller note: ${note}` : "");
 
   const r = await fetch("https://api.anthropic.com/v1/messages", {

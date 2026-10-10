@@ -194,19 +194,24 @@ function renderCard(data, el, n){
   if(id.notes) html += `<div class="notes">💡 ${esc(id.notes)}</div>`;
   if(id.authenticity_flags && id.authenticity_flags.toLowerCase()!=="none") html += `<div class="flag">⚠️ ${esc(id.authenticity_flags)}</div>`;
 
-  let median=null, cur="EUR";
-  if(c && !c.error && c.count>0){
-    median=c.median; cur=c.currency;
+  let cur="EUR", resaleEur=null, basis="";
+  if(c && !c.error && c.count>0 && c.median!=null){
+    cur=c.currency;
     html += `<div class="band"><div class="band-h">${esc(c.source)} · ${c.count} found</div>
       <div class="band-row"><div class="band-med">${fmt(c.median,cur)}</div>
       <div class="band-lohi">range ${fmt(c.low,cur)} – ${fmt(c.high,cur)}</div></div>`;
     if(c.examples&&c.examples.length) html += `<div class="examples">`+c.examples.map(ex=>`
       <a class="ex" href="${esc(ex.url)}" target="_blank" rel="noopener">${ex.image?`<img src="${esc(ex.image)}" alt="">`:`<span style="width:42px"></span>`}<span class="t">${esc(ex.title)}</span><span class="p">${esc(ex.price)}</span></a>`).join("")+`</div>`;
     html += `</div>`;
-  } else if(c && c.error){
-    html += `<div class="band"><div class="band-h">price lookup</div><div class="notes">Unavailable — use the links below.</div></div>`;
+    resaleEur = c.median * (RATE[cur]||1); basis = `${c.count} eBay comps`;
   } else {
-    html += `<div class="band"><div class="band-h">price lookup</div><div class="notes">Add eBay keys to switch on the auto price-band. For now, use the links below.</div></div>`;
+    const e = id.estimated_resale_eur || {};
+    const lo = Number(e.low)||0, hi = Number(e.high)||lo;
+    if(lo||hi){ resaleEur=(lo+hi)/2; basis="AI estimate"; }
+    const txt = (lo||hi)
+      ? `AI estimate <b style="color:var(--accent)">€${lo||hi}–€${hi||lo}</b> <span style="color:var(--faint)">— rough guide, no live comps yet. Verify via the links.</span>`
+      : (c&&c.error ? "Price lookup unavailable — use the links below." : "Add eBay keys for live comps — use the links below.");
+    html += `<div class="band"><div class="band-h">price estimate</div><div class="notes" style="font-style:normal">${txt}</div></div>`;
   }
 
   // paid -> verdict
@@ -225,16 +230,15 @@ function renderCard(data, el, n){
   const vEl = el.querySelector(".verdict");
   input.addEventListener("input", () => {
     const cost = parseFloat(input.value);
-    if(!cost || median==null){ vEl.style.display="none"; return; }
-    const medEur = median * (RATE[cur]||1);
-    const profit = medEur - cost, mult = medEur / cost;
+    if(!cost || resaleEur==null){ vEl.style.display="none"; return; }
+    const profit = resaleEur - cost, mult = resaleEur / cost;
     let cls="pass", label="🔴 Pass — no room";
     if(mult>=2.5){cls="go";label="🟢 Strong flip";}
     else if(mult>=1.6){cls="ok";label="🟡 Worth it";}
     else if(mult>=1.15){cls="thin";label="🟠 Thin margin";}
     vEl.className = "verdict "+cls; vEl.style.display="block";
     vEl.innerHTML = `${label} · ~€${Math.round(profit)} gross (${mult.toFixed(1)}×)
-      <small>median ≈ €${Math.round(medEur)}${cur!=="EUR"?" ("+cur+"→€ approx)":""} · before fees &amp; postage</small>`;
+      <small>vs ${basis} ≈ €${Math.round(resaleEur)} · before fees &amp; postage</small>`;
   });
 }
 </script>
