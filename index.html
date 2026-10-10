@@ -104,6 +104,11 @@
   .logbtn{width:100%;margin-top:10px;background:var(--surface-2);border:1px solid var(--line-strong);color:var(--ink);border-radius:12px;padding:12px;font-weight:700;font-size:.9rem;cursor:pointer;transition:border-color .15s}
   .logbtn:hover{border-color:var(--muted)}
   .logbtn:disabled{opacity:.6}
+  .lensbtn{width:100%;margin-top:14px;background:var(--surface-2);border:1px solid var(--line-strong);color:var(--ink);border-radius:12px;padding:12px;font-weight:700;font-size:.9rem;cursor:pointer;transition:border-color .15s}
+  .lensbtn:hover{border-color:var(--accent)}
+  .lensbtn:disabled{opacity:.6}
+  .lensresults{margin-top:12px}
+  .lensresults:empty{margin-top:0}
 
   .links{margin-top:14px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
   .links a{text-align:center;text-decoration:none;font-weight:700;font-size:.82rem;padding:12px 6px;border-radius:12px;border:1px solid var(--line-strong);color:var(--ink);background:var(--surface-2);transition:border-color .15s,transform .08s}
@@ -194,13 +199,13 @@ async function scan(){
       $("statusText").textContent = `Looking at ${files.length} things…`;
       await Promise.all(files.map(async (img,i)=>{
         const card=document.createElement("div"); $("results").appendChild(card);
-        try { renderCard(await post([img]), card, i+1); }
+        try { renderCard(await post([img]), card, i+1, img); }
         catch(e){ card.className="err"; card.textContent=`Item ${i+1}: ${e.message}`; }
       }));
     } else {
       $("statusText").textContent = files.length>1 ? "Looking at it…" : "Looking…";
       const card=document.createElement("div"); $("results").appendChild(card);
-      renderCard(await post(files), card);
+      renderCard(await post(files), card, undefined, files[0]);
     }
   } catch(err){
     const d=document.createElement("div"); d.className="err"; d.textContent="Couldn't scan: "+err.message; $("results").appendChild(d);
@@ -214,13 +219,13 @@ async function post(images){
   if(!res.ok || data.error) throw new Error(prettyErr(data.error) || ("HTTP "+res.status));
   return data;
 }
-function prettyErr(e){ return ({ identify_timeout:"the AI timed out — try again", identify_truncated:"the AI reply was cut off — try again", identify_failed:"couldn't read the photo", too_many_images:"max 5 photos per item", image_too_large:"a photo was too big", payload_too_large:"too much image data", bad_image_format:"unsupported image", unauthorized:"wrong access code", server_misconfigured:"app not configured (keys)", server_error:"server error", sold_quota:"monthly sold-lookups used up (resets next month)", sold_auth:"sold-price key invalid", sold_failed:"sold lookup failed", sold_timeout:"sold lookup timed out", no_query:"nothing to search", log_not_configured:"scan log not set up (Upstash keys)" })[e] || e; }
+function prettyErr(e){ return ({ identify_timeout:"the AI timed out — try again", identify_truncated:"the AI reply was cut off — try again", identify_failed:"couldn't read the photo", too_many_images:"max 5 photos per item", image_too_large:"a photo was too big", payload_too_large:"too much image data", bad_image_format:"unsupported image", unauthorized:"wrong access code", server_misconfigured:"app not configured (keys)", server_error:"server error", sold_quota:"monthly sold-lookups used up (resets next month)", sold_auth:"sold-price key invalid", sold_failed:"sold lookup failed", sold_timeout:"sold lookup timed out", no_query:"nothing to search", log_not_configured:"scan log not set up (Upstash keys)", lens_not_configured:"shop search not set up (SerpApi/Upstash keys)", lens_failed:"shop search failed", lens_timeout:"shop search timed out", lens_quota:"monthly shop-searches used up (resets next month)" })[e] || e; }
 
 function resize(file,max,q){ return new Promise((res,rej)=>{ const img=new Image(); img.onload=()=>{ let {width:w,height:h}=img; if(Math.max(w,h)>max){ const r=max/Math.max(w,h); w=Math.round(w*r); h=Math.round(h*r);} const c=document.createElement("canvas"); c.width=w;c.height=h; c.getContext("2d").drawImage(img,0,0,w,h); res(c.toDataURL("image/jpeg",q)); }; img.onerror=rej; img.src=URL.createObjectURL(file); }); }
 function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
 function fmt(v,cur){ if(v==null) return "—"; const sym=cur==="EUR"?"€":cur==="USD"?"$":cur==="GBP"?"£":""; return sym+Math.round(v); }
 
-function renderCard(data, el, n){
+function renderCard(data, el, n, img){
   const id = data.identity||{};
   const q = encodeURIComponent(id.search_query || [id.brand,id.item_type,id.era].filter(Boolean).join(" "));
   const conf = (id.confidence||"low").toLowerCase();
@@ -263,6 +268,17 @@ function renderCard(data, el, n){
       : (c&&c.error ? "Couldn't check prices — use the links below." : "Tap “What did it really sell for?” or the links below for real numbers.");
     html += `<div class="band"><div class="band-h">Rough price</div><div class="notes" style="font-style:normal">${txt}</div></div>`;
   }
+
+  // ---- where else this item lives on the web (Google Vision reverse image) ----
+  const w = data.web;
+  if(w && (w.best_guess || (w.pages&&w.pages.length))){
+    html += `<div class="band"><div class="band-h">🌐 Spotted around the web</div>`;
+    if(w.best_guess) html += `<div class="notes" style="font-style:normal;margin-top:8px">Looks like <b>${esc(w.best_guess)}</b></div>`;
+    if(w.pages&&w.pages.length) html += `<div class="examples">`+w.pages.map(p=>`
+      <a class="ex" href="${esc(p.url)}" target="_blank" rel="noopener"><span class="t"><b>${esc(p.site)}</b><br><span style="color:var(--muted)">${esc(p.title)}</span></span>${p.full?`<span class="p" style="font-size:.62rem;color:var(--good)">exact</span>`:`<span class="p" style="font-size:.62rem;color:var(--faint)">similar</span>`}</a>`).join("")+`</div>`;
+    html += `</div>`;
+  }
+  html += `<button class="lensbtn" type="button">🛍️ Find it in shops — with prices</button><div class="lensresults"></div>`;
 
   html += `<button class="soldbtn" type="button">💷 What did it really sell for? <small>1 of 100 this month</small></button>`;
   html += `<div class="paid"><label>What you paid</label>
@@ -316,6 +332,24 @@ function renderCard(data, el, n){
       soldBtn.style.display = "none";
       updateVerdict();
     } catch(e){ soldBtn.disabled=false; soldBtn.innerHTML = orig; alert(e.message); }
+  });
+
+  // On-demand priced shop matches (SerpApi Google Lens) — needs the original photo.
+  const lensBtn = el.querySelector(".lensbtn"), lensOut = el.querySelector(".lensresults");
+  lensBtn.addEventListener("click", async ()=>{
+    if(!img){ alert("No photo saved for this card — scan again to use shop search."); return; }
+    lensBtn.disabled=true; const o=lensBtn.innerHTML; lensBtn.textContent="Searching shops…";
+    try {
+      const r = await fetch("/api/lens",{ method:"POST", headers:{ "content-type":"application/json", "x-flipscan-secret":getSecret() }, body: JSON.stringify({ image: img }) });
+      if(r.status===401){ localStorage.removeItem("flipscan_secret"); throw new Error("Access code rejected — scan again to re-enter."); }
+      const d = await r.json();
+      if(!r.ok || d.error) throw new Error(prettyErr(d.error) || "shop search failed");
+      if(!d.matches || !d.matches.length){ lensBtn.disabled=false; lensBtn.textContent="No shop matches found"; return; }
+      lensOut.innerHTML = `<div class="band-h" style="margin-bottom:8px">🛍️ Same/similar in shops</div><div class="examples">`
+        + d.matches.map(m=>`<a class="ex" href="${esc(m.url)}" target="_blank" rel="noopener">${m.image?`<img src="${esc(m.image)}" alt="">`:`<span style="width:44px"></span>`}<span class="t"><b>${esc(m.source||"")}</b><br><span style="color:var(--muted)">${esc(m.title||"")}</span></span>${m.price?`<span class="p">${esc(m.price)}</span>`:""}</a>`).join("")
+        + `</div>`;
+      lensBtn.style.display="none";
+    } catch(e){ lensBtn.disabled=false; lensBtn.innerHTML=o; alert(e.message); }
   });
 
   // Log a purchase to the history (Upstash). Captures estimate-at-scan + what you paid.

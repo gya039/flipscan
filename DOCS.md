@@ -308,5 +308,15 @@ On a comps failure it is `{ error: "comps_failed" }`; with no eBay keys it is `n
   similar". NOTE: the SoldComps "what did it really sell for?" lookup stays
   keyword-based — that provider has no image search. Also a visual redesign
   (Space Grotesk/Inter, depth, glow, logo mark) and plainer human wording throughout.
+- **v0.9** — **Web-wide reverse image search** (find the exact item across the net):
+  - **"Spotted around the web"** — auto, every scan, via **Google Cloud Vision**
+    web detection (`GOOGLE_VISION_API_KEY`). Returns a best-guess name + links to
+    the sites hosting that item's image (brand site, boutiques, other marketplaces),
+    exact matches first. Cheap, takes the photo directly, dormant without a key.
+  - **"Find it in shops — with prices"** — on-demand button, via **SerpApi Google
+    Lens** (`SERPAPI_KEY`, ~100 free/mo). Returns visual matches with **shop name +
+    price** inline. Lens needs a public image URL, so `api/lens.js` stashes the photo
+    in Upstash (~10-min TTL) and serves it via `api/img.js` for SerpApi to fetch —
+    hence it also needs `UPSTASH_*` set. Priced results sorted first.
 
 _Yan's personal reselling tool — separate from the Let's Get Nessie project it sits next to on disk._
