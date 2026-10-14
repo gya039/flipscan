@@ -169,9 +169,19 @@ function summarise(items, ccy, market, used, matched) {
   if (!items.length) return { source: matched === "image" ? "eBay image match" : "eBay active listings (asking)", visual: matched === "image", marketplace: market, query: used, count: 0, currency: ccy, reliable: false, low: null, anchor: null, median: null, high: null, examples: [] };
   const prices = items.map((i) => parseFloat(i.price.value)).sort((a, b) => a - b);
   const anchor = pct(prices, 30);
-  // examples: the 4 listings priced closest to the anchor
-  const examples = [...items].sort((a, b) => Math.abs(parseFloat(a.price.value) - anchor) - Math.abs(parseFloat(b.price.value) - anchor))
-    .slice(0, 4).map((i) => ({ title: i.title, price: `${i.price.value} ${i.price.currency}`, url: i.itemWebUrl, image: (i.image && i.image.imageUrl) || null, condition: i.condition || "" }));
+  // Which 4 to SHOW as examples:
+  //  - image match: eBay already ranks by VISUAL similarity, so keep that order (most
+  //    similar first) — just skip wild price outliers so a freak listing doesn't headline.
+  //  - keyword match: no visual signal, so show the 4 priced closest to the anchor.
+  let picked;
+  if (matched === "image") {
+    picked = items.filter((i) => { const v = parseFloat(i.price.value); return v >= anchor * 0.3 && v <= anchor * 3; });
+    if (picked.length < 4) picked = items; // filter too aggressive → fall back to raw order
+    picked = picked.slice(0, 4);
+  } else {
+    picked = [...items].sort((a, b) => Math.abs(parseFloat(a.price.value) - anchor) - Math.abs(parseFloat(b.price.value) - anchor)).slice(0, 4);
+  }
+  const examples = picked.map((i) => ({ title: i.title, price: `${i.price.value} ${i.price.currency}`, url: i.itemWebUrl, image: (i.image && i.image.imageUrl) || null, condition: i.condition || "" }));
   return {
     source: matched === "image" ? "eBay image match (visually similar)" : "eBay active listings (asking)",
     visual: matched === "image", marketplace: market, query: used,
