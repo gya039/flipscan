@@ -238,7 +238,10 @@ $("tabCosts").addEventListener("click", toggleSettings);
 $("tabScan").addEventListener("click", ()=>window.scrollTo({top:0,behavior:"smooth"}));
 $("saveSettings").addEventListener("click", ()=>{
   const c={ fee:num($("sFee").value,0), post:num($("sPost").value,0), pack:num($("sPack").value,0), floor:num($("sFloor").value,5) };
-  localStorage.setItem("flipscan_costs", JSON.stringify(c)); $("settings").style.display="none";
+  try{ localStorage.setItem("flipscan_costs", JSON.stringify(c)); }catch{}
+  const b=$("saveSettings"), t=b.textContent;
+  b.textContent="Saved ✓"; b.style.background="var(--green-ic)"; b.style.color="#0E1A12";
+  setTimeout(()=>{ b.textContent=t; b.style.background=""; b.style.color=""; $("settings").style.display="none"; }, 900);
 });
 $("resetCode").addEventListener("click", ()=>{ localStorage.removeItem("flipscan_secret"); askSecret(); });
 function num(v,d){ const n=parseFloat(v); return isFinite(n)?n:d; }
