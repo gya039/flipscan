@@ -56,18 +56,44 @@ def post(path, payload, timeout=90):
     return {"status": status, "latency": round(time.time() - t0, 2), "json": j, "raw": raw}
 
 # ---------------- helpers ----------------
+try:
+    from PIL import Image
+    try:
+        import pillow_heif; pillow_heif.register_heif_opener()
+    except Exception:
+        pass
+    HAVE_PIL = True
+except Exception:
+    HAVE_PIL = False
+
 def encode_image(path):
-    ext = os.path.splitext(path)[1].lower()
-    if ext in (".heic", ".heif"):
-        return None, "heic_unsupported (API rejects HEIC; browser transcodes, stdlib can't)"
-    mime = MIME.get(ext)
-    if not mime:
-        return None, "unsupported_ext " + ext
-    with open(path, "rb") as f:
-        data = "data:%s;base64,%s" % (mime, base64.b64encode(f.read()).decode())
-    note = None
+    """Resize + encode EXACTLY like index.html: longest side <= 1568px, JPEG quality 0.82."""
+    if not HAVE_PIL:
+        ext = os.path.splitext(path)[1].lower()
+        mime = MIME.get(ext)
+        if not mime:
+            return None, "no PIL and unsupported ext " + ext
+        with open(path, "rb") as f:
+            data = "data:%s;base64,%s" % (mime, base64.b64encode(f.read()).decode())
+        return data, ("no PIL — sent original; >limit" if len(data) > MAX_IMG_CHARS else "no PIL — sent original bytes")
+    try:
+        im = Image.open(path)
+        im = im.convert("RGB")
+    except Exception as e:
+        return None, "open_failed: " + str(e)
+    w, h = im.size
+    m = max(w, h)
+    resized = ""
+    if m > 1568:
+        s = 1568.0 / m
+        im = im.resize((max(1, round(w * s)), max(1, round(h * s))), Image.LANCZOS)
+        resized = "resized %dx%d->%dx%d" % (w, h, im.size[0], im.size[1])
+    buf = io.BytesIO()
+    im.save(buf, "JPEG", quality=82)
+    data = "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()
+    note = resized
     if len(data) > MAX_IMG_CHARS:
-        note = "too_large (%d > %d chars; UI resizes to 1568px, harness can't without PIL)" % (len(data), MAX_IMG_CHARS)
+        note = (note + " ; ") + "STILL too large (%d chars)" % len(data)
     return data, note
 
 def query_of(idn):
@@ -90,6 +116,13 @@ def load_truth():
                 if r.get("file"):
                     rows[r["file"].strip()] = r
     return rows
+
+def save_raw(outdir, name, obj):
+    try:
+        with open(os.path.join(outdir, "raw", name + ".json"), "w", encoding="utf-8") as f:
+            json.dump(obj, f, indent=1, ensure_ascii=False)
+    except Exception:
+        pass
 
 # ---------------- validation ----------------
 def validate_scan(resp):
@@ -258,6 +291,7 @@ def main():
     ap.add_argument("--no-vinted", action="store_true")
     ap.add_argument("--no-log", action="store_true")
     ap.add_argument("--limit", type=int, default=0)
+    ap.add_argument("--only", default=None, help="only photos whose filename contains this substring")
     ap.add_argument("--base", default=None)
     args = ap.parse_args()
     global BASE
@@ -268,6 +302,8 @@ def main():
         print("No research/test-photos/ directory. Add photos first."); sys.exit(2)
     photos = sorted(f for f in os.listdir(PHOTOS)
                     if os.path.splitext(f)[1].lower() in (".jpg", ".jpeg", ".png", ".webp", ".heic", ".heif"))
+    if args.only:
+        photos = [p for p in photos if args.only.lower() in p.lower()]
     if args.limit > 0:
         photos = photos[:args.limit]
     n = len(photos)
@@ -306,6 +342,7 @@ def main():
         img, imnote = encode_image(os.path.join(PHOTOS, fn))
         row = {"stem": stem, "brand": "", "item_type": "", "confidence": "", "checks": [],
                "asking_med": "—", "sold_med": "—", "vinted_med": "—", "max_buy": "—", "verdict": "—",
+               "asking_med_num": None, "sold_med_num": None, "vinted_med_num": None,
                "thumb": img if (img and len(img) < 1_600_000) else "", "note": imnote or ""}
         if not img:
             row["checks"].append(("image_encodable", False, imnote)); rows.append(row); continue
@@ -329,17 +366,26 @@ def main():
             e = idn.get("estimated_resale_eur") or {}
             resale_anchor = ((e.get("low") or 0) + (e.get("high") or 0)) / 2 or None
         row["asking_med"] = round(asking_med, 1) if asking_med else "—"
+        row["asking_med_num"] = asking_med
 
         if not args.no_sold and q:
             r = post("/api/sold", {"query": q}); endpoint_lat["sold"].append(r["latency"])
+            save_raw(outdir, stem + ".sold", {"query": q, "response": r["json"]})
             ch, med = validate_prices(r, "sold"); row["checks"] += ch
+            row["sold_med_num"] = med
             if med: row["sold_med"] = round(med, 1)
             row["_sold_raw"] = r["json"]
         if not args.no_vinted and q:
             r = post("/api/vinted", {"query": q}); endpoint_lat["vinted"].append(r["latency"])
+            save_raw(outdir, stem + ".vinted", {"query": q, "response": r["json"]})
             ch, med = validate_prices(r, "vinted"); row["checks"] += ch
+            row["vinted_med_num"] = med
             if med: row["vinted_med"] = round(med, 1)
             row["_vinted_raw"] = r["json"]
+            vj = r["json"]
+            print("  VINTED q='%s' count=%s low=%s anchor=%s median=%s high=%s country=%s examples=%s" % (
+                q, vj.get("count"), vj.get("low"), vj.get("anchor"), vj.get("median"), vj.get("high"),
+                vj.get("country"), [e.get("price") for e in (vj.get("examples") or [])]))
         if i < LENS_WEB_LIMIT:
             r = post("/api/lens", {"image": img}); endpoint_lat["lens"].append(r["latency"]); row["checks"] += validate_lensweb(r, "lens")
             r = post("/api/web", {"image": img}); endpoint_lat["web"].append(r["latency"]); row["checks"] += validate_lensweb(r, "web")
@@ -358,11 +404,23 @@ def main():
         else:
             row["checks"].append(("has_a_price", False, "no comps and no estimate"))
 
+        # --- real sanity checks (behaviour, not just shape) ---
+        meds = {k: v for k, v in (("asking", row["asking_med_num"]), ("sold", row["sold_med_num"]), ("vinted", row["vinted_med_num"])) if v}
+        if len(meds) >= 2:
+            mx, mn = max(meds.values()), min(meds.values())
+            row["checks"].append(("sources_within_2.5x", mx <= mn * 2.5,
+                                  "spread %.1fx %s" % (mx / mn, {k: round(v, 1) for k, v in meds.items()})))
+        vc = (row.get("_vinted_raw") or {}).get("count") or 0
+        if 0 < vc < 8:
+            row["checks"].append(("vinted_not_thin", False, "Vinted count %d (<8) — too thin to trust if it drives Max Buy" % vc))
+
         # truth comparison
         tr = truth.get(fn)
         if tr:
             if tr.get("brand"):
                 row["checks"].append(("truth_brand", tr["brand"].lower() in (idn.get("brand", "").lower()), "truth %s vs %s" % (tr["brand"], idn.get("brand"))))
+                row["checks"].append(("brand_not_unknown_vs_truth", idn.get("brand", "").strip().lower() not in ("", "unknown"),
+                                      "truth has brand '%s' but AI said '%s'" % (tr["brand"], idn.get("brand"))))
             if tr.get("item_type"):
                 row["checks"].append(("truth_item_type", tr["item_type"].lower() in (idn.get("item_type", "").lower()), "truth %s vs %s" % (tr["item_type"], idn.get("item_type"))))
             if tr.get("sold_price"):
@@ -375,6 +433,20 @@ def main():
         rows.append(row)
         if i < n - 1:
             time.sleep(1)
+
+    # --- run-level sanity: identical medians across DIFFERENT items ---
+    for src, key in (("asking", "asking_med_num"), ("sold", "sold_med_num"), ("vinted", "vinted_med_num")):
+        seen = {}
+        for r in rows:
+            v = r.get(key)
+            if v:
+                seen.setdefault(round(v, 1), []).append(r["stem"])
+        for val, stems in seen.items():
+            if len(stems) > 1:
+                detail = "%s median EUR%s identical across %d items: %s" % (src, val, len(stems), ", ".join(s[:8] for s in stems))
+                for r in rows:
+                    if r["stem"] in stems:
+                        r["checks"].append(("no_dup_median_%s" % src, False, detail))
 
     # results.csv
     with open(os.path.join(outdir, "results.csv"), "w", newline="", encoding="utf-8") as f:
