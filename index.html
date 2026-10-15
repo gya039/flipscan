@@ -166,6 +166,103 @@
   .links a small{display:block;font-weight:400;color:var(--faint);font-size:.63rem;margin-top:2px}
   .err{margin-top:14px;background:#3a2020;color:#e0707c;border-radius:12px;padding:12px;font-size:.85rem}
   footer{margin-top:28px;color:var(--faint);font-size:.72rem;text-align:center;line-height:1.5}
+
+  /* ===== result screen (redesign) ===== */
+  .rcard{animation:rise .28s ease both;padding:0 0 10px}
+  .rhead{display:flex;align-items:center;justify-content:space-between;padding:4px 0 0}
+  .rback{width:40px;height:40px;display:flex;align-items:center;justify-content:center;background:none;border:0;color:var(--ink);cursor:pointer}
+  .rtime{font-family:var(--mono);font-size:12px;color:var(--muted);letter-spacing:.08em}
+  .idrow{display:flex;gap:14px;align-items:center;margin-top:6px}
+  .idthumb{width:64px;height:64px;border-radius:16px;background:var(--surface-2) center/cover no-repeat;flex:none}
+  .idmeta{flex:1;min-width:0}
+  .idbrand{font-family:var(--display);font-weight:800;font-size:24px;letter-spacing:-.02em;line-height:1.05}
+  .idsub{color:var(--muted);font-size:14px;margin-top:2px}
+  .idchips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+  .idchip{font-size:12px;padding:3px 9px;border-radius:999px;background:var(--chip);color:var(--muted)}
+  .idchip.sure{background:var(--chipg-bg);color:var(--chipg);font-weight:600}
+  .idchip.warn{background:#3a3417;color:var(--warn);font-weight:600}
+  .rnote{color:var(--muted);font-size:13px;margin-top:12px;line-height:1.5}
+  .rflag{display:flex;gap:8px;align-items:flex-start;color:var(--warn);background:#2a2713;border-radius:10px;padding:9px 11px;font-size:13px;margin-top:10px}
+  .rnudge{display:flex;gap:8px;align-items:flex-start;color:var(--muted);border:1px dashed var(--line);border-radius:10px;padding:9px 11px;font-size:13px;margin-top:10px}
+
+  .paycard{position:relative;background:var(--accent);color:var(--on-accent);border-radius:22px;padding:20px 22px 18px;margin-top:18px}
+  .paycard.skip{background:#3A2020;color:#F2C0C0}
+  .paydot{position:absolute;right:22px;top:22px;width:14px;height:14px;border-radius:50%;background:var(--bg)}
+  .paylabel{font-family:var(--mono);font-size:12px;font-weight:700;letter-spacing:.12em}
+  .payval{font-family:var(--mono);font-weight:700;font-size:72px;line-height:1;letter-spacing:-.04em;margin-top:6px}
+  .paysub{border-top:2px dashed rgba(18,20,15,.35);margin-top:14px;padding-top:12px;font-size:14px;font-weight:500}
+  .paycard.skip .paysub{border-top:0;margin-top:8px;padding-top:0}
+
+  .rlabelrow{display:flex;align-items:baseline;justify-content:space-between;margin-top:22px}
+  .rlabel{font-family:var(--mono);font-size:12px;letter-spacing:.12em;color:var(--muted)}
+  .rhint{font-size:12px;color:var(--faint)}
+  .srctabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;padding:4px;border-radius:14px;background:var(--surface);border:1px solid var(--line);margin-top:10px}
+  .srctabs button{height:44px;border:0;border-radius:10px;background:transparent;color:var(--muted);font-family:var(--body);font-weight:500;font-size:13px;cursor:pointer}
+  .srctabs button.on{background:var(--surface-2);color:var(--ink);font-weight:600}
+
+  .valuecard{background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:18px;margin-top:12px}
+  .vtop{display:flex;align-items:flex-end;justify-content:space-between;gap:10px}
+  .vmid{font-family:var(--mono);font-weight:700;font-size:44px;line-height:1;letter-spacing:-.03em}
+  .vchip{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:5px 10px;border-radius:999px;white-space:nowrap}
+  .vchip .dot{width:7px;height:7px;border-radius:50%}
+  .vchip.high{background:var(--chipg-bg);color:var(--chipg)}.vchip.high .dot{background:var(--chipg)}
+  .vchip.med{background:#3a3417;color:var(--warn)}.vchip.med .dot{background:var(--warn)}
+  .vchip.low{background:#3a2020;color:#e0707c}.vchip.low .dot{background:#e0707c}
+  .rangebar{position:relative;height:34px;margin-top:18px}
+  .rangebar .track{position:absolute;left:0;right:0;top:13px;height:8px;border-radius:4px;background:var(--line)}
+  .rangebar .rfill{position:absolute;left:18%;right:18%;top:13px;height:8px;border-radius:4px}
+  .rangebar .rmark{position:absolute;top:6px;width:4px;height:22px;border-radius:2px;transform:translateX(-50%)}
+  .rlabels{display:flex;justify-content:space-between;font-family:var(--mono);font-size:12px;color:var(--muted)}
+  .vnote{color:var(--faint);font-size:12px;margin-top:12px;line-height:1.45}
+  .vfetchnote{color:var(--muted);font-size:14px;line-height:1.45}
+  .vfetchbtn{width:100%;margin-top:12px;min-height:50px;border-radius:14px;border:1px solid var(--line);background:var(--surface-2);color:var(--ink);font-family:var(--body);font-weight:600;font-size:14px;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;padding:8px}
+  .vfetchbtn:hover{border-color:var(--teal)}
+  .vfetchbtn small{font-weight:400;color:var(--faint);font-size:12px}
+  .vfetchbtn:disabled{opacity:.6}
+  .vempty{color:var(--muted);font-size:14px;padding:6px 0}
+  .compscroll{display:flex;gap:10px;overflow-x:auto;margin-top:14px;padding-bottom:4px;scrollbar-width:none}
+  .compscroll::-webkit-scrollbar{display:none}
+  .compcard{width:116px;flex:none;text-decoration:none;color:var(--ink)}
+  .compcard .ph{height:116px;border-radius:14px;background:var(--surface-2) center/cover no-repeat}
+  .compcard .cp{font-family:var(--mono);font-weight:700;font-size:15px;margin-top:7px}
+  .compcard .cd{font-size:12px;color:var(--faint)}
+
+  .paidwrap{margin-top:24px}
+  .paidbox{display:flex;align-items:center;gap:10px;margin-top:8px;height:60px;border-radius:16px;background:var(--surface);border:2px solid var(--accent);padding:0 16px}
+  .paidbox .cur{font-family:var(--mono);font-size:24px;color:var(--muted)}
+  .paidbox input{flex:1;min-width:0;background:transparent;border:0;color:var(--ink);font-family:var(--mono);font-weight:700;font-size:26px;outline:none}
+  .tagflag{font-size:12px;color:var(--accent);font-weight:600;white-space:nowrap}
+
+  .verdictcard{display:none;align-items:center;gap:14px;margin-top:12px;border-radius:18px;padding:16px 18px;animation:rise .2s ease both}
+  .verdictcard .vico{width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex:none;color:#0E1A12}
+  .verdictcard .vtitle{font-family:var(--display);font-weight:800;font-size:22px;letter-spacing:-.01em}
+  .verdictcard .vbody{font-size:14px;margin-top:1px}
+  .verdictcard.go{background:var(--green-bg)}.verdictcard.go .vico{background:var(--green-ic)}.verdictcard.go .vtitle{color:var(--green)}.verdictcard.go .vbody{color:var(--green-txt)}
+  .verdictcard.ok{background:#1f2a16}.verdictcard.ok .vico{background:#B8D86A}.verdictcard.ok .vtitle{color:#C7E07A}.verdictcard.ok .vbody{color:#B6C79A}
+  .verdictcard.thin{background:#2f2713}.verdictcard.thin .vico{background:var(--warn);color:#2a2411}.verdictcard.thin .vtitle{color:var(--warn)}.verdictcard.thin .vbody{color:#D8C08A}
+  .verdictcard.pass{background:#2f1a1a}.verdictcard.pass .vico{background:#E88A8A;color:#2a1111}.verdictcard.pass .vtitle{color:#F0A6A6}.verdictcard.pass .vbody{color:#D8AEAE}
+
+  .digsec{margin-top:22px}
+  .diglabel{font-family:var(--mono);font-size:12px;letter-spacing:.12em;color:var(--muted)}
+  .digrow{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:10px}
+  .digrow button{min-height:52px;border-radius:14px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font-family:var(--body);font-weight:600;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;padding:8px}
+  .digrow button:hover{border-color:var(--accent)}
+  .digrow button:disabled{opacity:.6}
+  .lensresults,.webresults{margin-top:4px}.lensresults:empty,.webresults:empty{margin:0}
+  .examples{margin-top:10px;display:flex;flex-direction:column;gap:7px}
+  .ex{display:flex;gap:10px;align-items:center;background:var(--surface-2);border:1px solid var(--line);border-radius:12px;padding:7px;text-decoration:none;color:var(--ink)}
+  .ex img{width:44px;height:44px;border-radius:9px;object-fit:cover;background:var(--line);flex:none}
+  .ex .t{font-size:12px;line-height:1.25}
+  .ex .p{font-family:var(--mono);font-size:13px;color:var(--accent);white-space:nowrap;margin-left:auto;font-weight:700}
+  .links{margin-top:12px;display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .links a{text-align:center;text-decoration:none;font-weight:600;font-size:13px;padding:11px 6px;border-radius:12px;border:1px solid var(--line);color:var(--muted);background:var(--surface)}
+  .links a:hover{border-color:var(--accent);color:var(--ink)}
+  .logbar{display:flex;gap:10px;margin-top:24px}
+  .logbtn{flex:1;min-height:58px;border:0;border-radius:18px;background:var(--accent);color:var(--on-accent);font-family:var(--display);font-weight:800;font-size:19px;cursor:pointer}
+  .logbtn:hover{background:var(--accent-hi)}
+  .logbtn.saved{background:var(--green-ic)}
+  .logbtn:disabled{opacity:.7}
+  .scanagain{width:58px;height:58px;flex:none;border-radius:18px;border:1px solid var(--line);background:var(--surface);color:var(--ink);display:flex;align-items:center;justify-content:center;cursor:pointer}
 </style>
 </head>
 <body>
@@ -312,184 +409,198 @@ function examplesHtml(list){
   return `<div class="examples">`+list.map(ex=>`<a class="ex" href="${esc(ex.url||'#')}" target="_blank" rel="noopener">${ex.image?`<img src="${esc(ex.image)}" alt="">`:`<span style="width:42px"></span>`}<span class="t">${esc(ex.title)}</span><span class="p">${esc(ex.price)}</span></a>`).join("")+`</div>`;
 }
 
+// ---- result-screen helpers (icons + source model) ----
+function chevSvg(){return '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>';}
+function scanSvg(){return '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3"/></svg>';}
+function lensSvg(){return '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4-4"/></svg>';}
+function globeSvg(){return '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></svg>';}
+function checkSvg(){return '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" aria-hidden="true"><path d="M5 12l5 5L19 7"/></svg>';}
+function xSvg(){return '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>';}
+function warnSvg(){return '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M12 3l9 16H3z"/><path d="M12 10v4M12 17h.01"/></svg>';}
+function warnMini(){return '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3l9 16H3z"/><path d="M12 10v4M12 17h.01"/></svg>';}
+function camMini(){return '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 8a2 2 0 0 1 2-2h2l2-2h6l2 2h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><circle cx="12" cy="13" r="4"/></svg>';}
+function compExamples(list, domain){ return (list||[]).map(ex=>({ price: ex.price||"", url: ex.url||"#", image: ex.image||null, domain })); }
+function srcFromComps(id, c){
+  const hasComps = c && !c.error && c.count>0 && c.anchor!=null;
+  if(hasComps && c.count>=3){
+    const rate=RATE[c.currency]||1;
+    return { key:"asking", label:"eBay asking", accent:"var(--accent)", fill:"#7A8A2E", state:"ready",
+      mid:c.anchor*rate, low:c.low*rate, high:c.high*rate, count:c.count, confidence:c.confidence, tight:c.tight,
+      basis:"what they're asking", priceSource:"eBay asking",
+      note:(c.visual?"Visually-matched eBay listings — ":"eBay ")+"asking prices, priced off the lower third.",
+      examples: compExamples(c.examples,"ebay.co.uk") };
+  }
+  const e=id.estimated_resale_eur||{}, lo=Number(e.low)||0, hi=Number(e.high)||lo;
+  if(lo||hi) return { key:"asking", label:"Estimate", accent:"var(--accent)", fill:"#7A8A2E", state:"ready", isEstimate:true,
+    mid:(lo+hi)/2, low:lo, high:hi, count:hasComps?c.count:0, confidence:"low", tight:false,
+    basis:"a rough guess", priceSource:"AI", note:"AI estimate — no solid comps yet. Treat as a guess; load a real source.",
+    examples: hasComps?compExamples(c.examples,"ebay.co.uk"):[] };
+  return { key:"asking", label:"Estimate", accent:"var(--accent)", fill:"#7A8A2E", state:"empty", isEstimate:true,
+    mid:null, basis:"", priceSource:"AI", count:0, confidence:"low", note:"Couldn't price this one — load a real source or use the links.", examples:[] };
+}
+function idChipsHtml(id, conf){
+  let h = conf==="high"?'<span class="idchip sure">ID sure</span>':conf==="medium"?'<span class="idchip">ID likely</span>':'<span class="idchip warn">ID unsure</span>';
+  if(id.size&&id.size!=="unknown") h+=`<span class="idchip">size ${esc(id.size)}</span>`;
+  if(id.key_features){ const kf=String(id.key_features).split(/[,;]/)[0].trim(); if(kf) h+=`<span class="idchip">${esc(kf.length>22?kf.slice(0,22)+"…":kf)}</span>`; }
+  return h;
+}
+function confChipHtml(s){
+  const c=s.confidence||"low", n=s.count||0, cls=c==="high"?"high":c==="medium"?"med":"low";
+  const txt = c==="high"?`${n} comps · tight`:c==="medium"?(n>=8?`${n} comps · varied`:`${n} comps`):(n>0?`${n} comps · guess`:"a guess");
+  return `<div class="vchip ${cls}"><span class="dot"></span>${txt}</div>`;
+}
+function rangeMarkerPct(s){ if(s.low==null||s.high==null||s.high<=s.low) return 50; return Math.max(6,Math.min(94,(s.mid-s.low)/(s.high-s.low)*100)); }
+function compCardsHtml(list){
+  if(!list||!list.length) return "";
+  return `<div class="compscroll">`+list.map(ex=>`<a class="compcard" href="${esc(ex.url)}" target="_blank" rel="noopener"><div class="ph"${ex.image?` style="background-image:url('${esc(ex.image)}')"`:""}></div><div class="cp">${esc(ex.price||"")}</div><div class="cd">${esc(ex.domain||"")}</div></a>`).join("")+`</div>`;
+}
+function valueCardHtml(s){
+  if(s.state==="unfetched") return `<div class="vfetchnote">${esc(s.fetchNote)}</div><button class="vfetchbtn" data-src="${s.key}">${esc(s.fetchLabel)}<small>${esc(s.fetchQuota)}</small></button>`;
+  if(s.state==="empty"||s.mid==null) return `<div class="vempty">${esc(s.note||"No data for this source.")}</div>`;
+  const mk=rangeMarkerPct(s);
+  return `<div class="vtop"><div class="vmid" style="color:${s.accent}">${fmt(s.mid,"EUR")}</div>${confChipHtml(s)}</div>
+    <div class="rangebar"><div class="track"></div><div class="rfill" style="background:${s.fill}"></div><div class="rmark" style="left:${mk}%;background:${s.accent}"></div></div>
+    <div class="rlabels"><span>${fmt(s.low,"EUR")}</span><span>most sit here</span><span>${fmt(s.high,"EUR")}</span></div>
+    <div class="vnote">${esc(s.note)}</div>${compCardsHtml(s.examples)}`;
+}
+
 function renderCard(data, el, n, img){
   const id = data.identity||{};
   const q = encodeURIComponent(id.search_query || [id.brand,id.item_type,id.era].filter(Boolean).join(" "));
   const conf = (id.confidence||"low").toLowerCase();
   const c = data.comps;
-  el.className="card"; let html="";
 
-  html += `<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
-    <div><div class="id-brand">${n?`<span style="color:var(--faint)">#${n} </span>`:""}${esc(id.brand||"Unknown")}</div>
-    <div class="id-sub">${esc(id.item_type||"")} ${id.era&&id.era!=="unknown"?"· "+esc(id.era):""}</div></div>
-    <span class="conf ${conf}">${esc(conf)}</span></div>`;
-
-  const chips=[];
-  if(id.key_features) chips.push(`<span class="chip"><span class="l">look</span> ${esc(id.key_features)}</span>`);
-  if(id.size&&id.size!=="unknown") chips.push(`<span class="chip"><span class="l">size</span> ${esc(id.size)}</span>`);
-  if(id.condition_notes) chips.push(`<span class="chip"><span class="l">condition</span> ${esc(id.condition_notes)}</span>`);
-  if(chips.length) html += `<div class="chips">${chips.join("")}</div>`;
-  if(id.notes) html += `<div class="notes">💡 ${esc(id.notes)}</div>`;
-  if(id.authenticity_flags && id.authenticity_flags.toLowerCase()!=="none") html += `<div class="flag">⚠️ ${esc(id.authenticity_flags)}</div>`;
-  if(conf==="low") html += `<div class="nudge">📸 Not sure on this one — take a close-up of the label and scan it again.</div>`;
-
-  // ---- decide what the verdict rests on ----
-  // 3+ comps drive the price (with a confidence badge). 1-2 comps are shown as
-  // evidence but flagged a guess, and the AI estimate carries the number. 0 comps = estimate only.
+  const query = id.search_query || [id.brand,id.item_type,id.era].filter(Boolean).join(" ");
+  const now=new Date(), ts=String(now.getHours()).padStart(2,"0")+":"+String(now.getMinutes()).padStart(2,"0");
+  const srcs = {
+    asking: srcFromComps(id, c),
+    sold:   { key:"sold", label:"eBay sold", accent:"var(--green)", fill:"#2E7D4F", state:"unfetched", fetchLabel:"Show real eBay sold prices", fetchQuota:"1 of 100 this month", fetchNote:"What this actually sold for on eBay.", examples:[] },
+    vinted: { key:"vinted", label:"Vinted IE", accent:"var(--teal)", fill:"var(--teal-bar)", state:"unfetched", fetchLabel:"Show Vinted (IE) prices", fetchQuota:"your market · ~€0.03", fetchNote:"What sellers ask on Vinted — your market.", examples:[] },
+  };
+  let viewed="asking";
   let resaleEur=null, basis="", cur="EUR", priceSource="AI", bandLow=null, bandHigh=null;
-  const hasComps = c && !c.error && c.count>0 && c.anchor!=null;
-  const useComps = hasComps && c.count>=3;
-  if(useComps){
-    cur=c.currency;
-    html += `<div class="band"><div class="band-h">${c.visual?"🔍 Visually similar on eBay":"Going for about this on eBay"}</div>
-      <div class="cbadge-row">${compBadge(c.confidence,c.count,c.tight)}</div>
-      <div class="band-row"><div class="band-med">${fmt(c.anchor,cur)}</div>
-      <div class="band-lohi">a fair price to work off<br>most sit ${fmt(c.low,cur)}–${fmt(c.high,cur)}</div></div>`;
-    html += examplesHtml(c.examples);
-    html += `</div>`;
-    resaleEur = c.anchor * (RATE[cur]||1); basis = `what they're asking`;
-    priceSource = "eBay asking"; bandLow = c.low*(RATE[cur]||1); bandHigh = c.high*(RATE[cur]||1);
-  } else {
-    const e = id.estimated_resale_eur || {};
-    const lo=Number(e.low)||0, hi=Number(e.high)||lo;
-    if(lo||hi){ resaleEur=(lo+hi)/2; basis="a rough guess"; priceSource="AI"; bandLow=lo; bandHigh=hi; }
-    const txt = (lo||hi)
-      ? `Rough guess <b style="color:var(--accent)">€${lo||hi}–€${hi||lo}</b> <span style="color:var(--faint)">— ${hasComps?`only ${c.count} real listing${c.count===1?"":"s"}, too few to trust`:(c&&c.error?"couldn't check live prices":"no real listings found yet")}. ${hasComps?"See them below, or try":"Try"} the sold-price button or links.</span>`
-      : (c&&c.error ? "Couldn't check prices — use the links below." : "Tap “What did it really sell for?” or the links below for real numbers.");
-    html += `<div class="band"><div class="band-h">Rough price</div><div class="notes" style="font-style:normal">${txt}</div>`;
-    if(hasComps){ html += `<div class="cbadge-row">${compBadge("low",c.count,false)}</div>`+examplesHtml(c.examples); }
-    html += `</div>`;
+  function drive(s){ resaleEur=s.mid; basis=s.basis; priceSource=s.priceSource; bandLow=s.low; bandHigh=s.high; }
+  if(srcs.asking.state==="ready") drive(srcs.asking);
+
+  let extra="";
+  if(id.notes) extra += `<div class="rnote">${esc(id.notes)}</div>`;
+  if(id.authenticity_flags && id.authenticity_flags.toLowerCase()!=="none") extra += `<div class="rflag">${warnMini()} ${esc(id.authenticity_flags)}</div>`;
+  if(conf==="low") extra += `<div class="rnudge">${camMini()} Not sure on this one — a close-up of the label would nail it.</div>`;
+
+  el.className="rcard";
+  el.innerHTML = `
+    <div class="rhead"><button class="rback" aria-label="Back to scan">${chevSvg()}</button><div class="rtime">SCAN · ${ts}</div><span style="width:36px"></span></div>
+    <div class="idrow">
+      <div class="idthumb"${img?` style="background-image:url('${img}')"`:""}></div>
+      <div class="idmeta">
+        <div class="idbrand">${n?`<span style="color:var(--faint)">#${n} </span>`:""}${esc(id.brand||"Unknown")}</div>
+        <div class="idsub">${esc(id.item_type||"")}${id.era&&id.era!=="unknown"?" · "+esc(id.era):""}</div>
+        <div class="idchips">${idChipsHtml(id, conf)}</div>
+      </div>
+    </div>
+    ${extra}
+    <div class="paycard"></div>
+    <div class="rlabelrow"><span class="rlabel">RESALE VALUE</span><span class="rhint">tap a source</span></div>
+    <div class="srctabs">
+      <button data-src="asking">${srcs.asking.isEstimate?"Estimate":"eBay asking"}</button>
+      <button data-src="sold">eBay sold</button>
+      <button data-src="vinted">Vinted IE</button>
+    </div>
+    <div class="valuecard"></div>
+    <div class="paidwrap"><label class="rlabel">WHAT YOU PAID</label>
+      <div class="paidbox"><span class="cur">€</span><input type="number" inputmode="decimal" placeholder="0"><span class="tagflag" style="display:none">from tag</span></div>
+    </div>
+    <div class="verdictcard"></div>
+    <div class="digsec">
+      <div class="diglabel">NOT SURE? DIG DEEPER</div>
+      <div class="digrow"><button class="lensbtn">${lensSvg()}Google Lens</button><button class="webbtn">${globeSvg()}Search the web</button></div>
+      <div class="lensresults"></div><div class="webresults"></div>
+      <div class="links">
+        <a href="https://www.ebay.co.uk/sch/i.html?_nkw=${q}&LH_Sold=1&LH_Complete=1" target="_blank" rel="noopener">eBay sold</a>
+        <a href="https://www.vinted.ie/catalog?search_text=${q}&order=price_high_to_low" target="_blank" rel="noopener">Vinted</a>
+        <a href="https://www.depop.com/search/?q=${q}" target="_blank" rel="noopener">Depop</a>
+      </div>
+    </div>
+    <div class="logbar"><button class="logbtn">Log it as bought</button><button class="scanagain" aria-label="Scan another">${scanSvg()}</button></div>`;
+
+  const input = el.querySelector(".paidbox input"), vEl = el.querySelector(".verdictcard");
+  const tabsEl = el.querySelector(".srctabs"), valEl = el.querySelector(".valuecard"), payEl = el.querySelector(".paycard");
+
+  function renderValue(){
+    const s = srcs[viewed];
+    valEl.innerHTML = valueCardHtml(s);
+    tabsEl.querySelectorAll("button").forEach(b=>b.classList.toggle("on", b.dataset.src===viewed));
+    const fb = valEl.querySelector(".vfetchbtn");
+    if(fb) fb.addEventListener("click", ()=>fetchSource(fb.dataset.src, fb));
   }
-
-  // ---- Vinted (IE) band: filled on demand, shown SEPARATELY from the eBay band ----
-  html += `<div class="vintedband"></div>`;
-
-  // ---- truer-price actions: the two lookups that RE-BASE the number, kept prominent ----
-  html += `<div class="price-actions">
-    <button class="soldbtn" type="button">💷 eBay sold<small>1 of 100/mo</small></button>
-    <button class="vintedbtn" type="button">🛒 Vinted IE<small>your market · ~€0.03</small></button></div>`;
-
-  // ---- max buy price: the decision aid, shown BEFORE you commit a cost ----
-  html += `<div class="maxbuy" style="display:none"></div>`;
-
-  // ---- what you paid -> verdict (the primary decision, kept front-and-centre) ----
-  html += `<div class="paid"><label>What you paid</label>
-    <div class="row"><span class="cur">€</span><input type="number" inputmode="decimal" placeholder="e.g. 6" /></div>
-    <div class="verdict"></div></div>`;
-  html += `<button class="logbtn" type="button">💾 Log purchase</button>`;
-
-  // ---- dig deeper: optional research, folded away so it doesn't crowd the decision ----
-  html += `<details class="dig"><summary>Dig deeper — shops &amp; reverse image search</summary>
-    <button class="lensbtn" type="button">🛍️ Find it in shops — with prices</button><div class="lensresults"></div>
-    <button class="webbtn" type="button">🌐 Reverse image search the web</button><div class="webresults"></div>
-    <div class="links">
-      <a href="https://www.ebay.co.uk/sch/i.html?_nkw=${q}&LH_Sold=1&LH_Complete=1" target="_blank" rel="noopener">eBay<small>sold</small></a>
-      <a href="https://www.vinted.ie/catalog?search_text=${q}&order=price_high_to_low" target="_blank" rel="noopener">Vinted<small>listings</small></a>
-      <a href="https://www.depop.com/search/?q=${q}" target="_blank" rel="noopener">Depop<small>listings</small></a></div>
-  </details>`;
-
-  el.innerHTML = html;
-
-  const input = el.querySelector(".paid input"), vEl = el.querySelector(".verdict");
   function updateVerdict(){
     const cost = parseFloat(input.value);
     if(!cost || resaleEur==null){ vEl.style.display="none"; return; }
     const s = costs();
-    const fees = resaleEur * (s.fee/100);
-    const afterCosts = resaleEur - fees - s.post - s.pack;   // net resale value in hand
-    const net = afterCosts - cost, gross = resaleEur - cost, mult = afterCosts / cost;
-    let cls, label;
-    if(net < s.floor){ cls="pass"; label=`🔴 Leave it — under €${s.floor} profit`; }
-    else if(mult>=2.5){ cls="go"; label="🟢 Grab it"; }
-    else if(mult>=1.6){ cls="ok"; label="🟡 Worth it"; }
-    else if(mult>=1.15){ cls="thin"; label="🟠 A bit tight"; }
-    else { cls="pass"; label="🔴 Leave it — no room"; }
-    vEl.className="verdict "+cls; vEl.style.display="block";
-    vEl.innerHTML = `${label} — you'd keep about €${Math.round(net)} <span style="opacity:.7">(${mult.toFixed(1)}× your money)</span>
-      <small>sells for ~€${Math.round(resaleEur)} (${basis}), minus ${s.fee}% fee, €${s.post} postage, €${s.pack} packaging</small>`;
+    const afterCosts = resaleEur - resaleEur*(s.fee/100) - s.post - s.pack;
+    const net = afterCosts - cost, mult = afterCosts / cost;
+    let tier,label,ico;
+    if(net < s.floor){ tier="pass"; label="Leave it"; ico=xSvg(); }
+    else if(mult>=2.5){ tier="go"; label="Grab it"; ico=checkSvg(); }
+    else if(mult>=1.6){ tier="ok"; label="Worth it"; ico=checkSvg(); }
+    else if(mult>=1.15){ tier="thin"; label="A bit tight"; ico=warnSvg(); }
+    else { tier="pass"; label="Leave it"; ico=xSvg(); }
+    const sub = net<s.floor ? `Under your €${s.floor} floor — you'd keep about €${Math.round(net)}` : `You'd keep about €${Math.round(net)} · ${mult.toFixed(1)}× your money`;
+    vEl.className="verdictcard "+tier; vEl.style.display="flex";
+    vEl.innerHTML = `<div class="vico">${ico}</div><div><div class="vtitle">${label}</div><div class="vbody">${sub}</div></div>`;
   }
-  input.addEventListener("input", updateVerdict);
-
-  // ---- Max Buy Price: most you can pay and still make a worthwhile flip ----
-  // Same maths as the verdict, solved for cost. "Worth it" = keep 1.6x your money after
-  // costs AND clear your profit floor — whichever caps you first.
-  const mbEl = el.querySelector(".maxbuy");
   function updateMaxBuy(){
-    if(resaleEur==null){ mbEl.style.display="none"; return; }
+    if(resaleEur==null){ payEl.style.display="none"; return; }
     const s = costs();
-    const afterCosts = resaleEur - resaleEur*(s.fee/100) - s.post - s.pack;  // value in hand before cost
+    const afterCosts = resaleEur - resaleEur*(s.fee/100) - s.post - s.pack;
     const maxBuy = Math.floor(Math.min(afterCosts/1.6, afterCosts - s.floor));
-    mbEl.style.display="block";
+    payEl.style.display="block";
     if(maxBuy < 1){
-      mbEl.className="maxbuy none";
-      mbEl.innerHTML = `💸 <b>Skip it</b> — won't clear €${s.floor} profit even if it were free
-        <small>only ~€${Math.round(afterCosts)} left after ${s.fee}% fee, €${s.post} postage, €${s.pack} packaging</small>`;
+      payEl.className="paycard skip";
+      payEl.innerHTML = `<div class="paylabel">SKIP IT</div><div class="paysub">Won't clear your €${s.floor} profit even if it were free.</div>`;
     } else {
-      mbEl.className="maxbuy";
-      mbEl.innerHTML = `💸 Pay up to <b>€${maxBuy}</b> <span>and it's still worth flipping</span>
-        <small>sells ~€${Math.round(resaleEur)} (${basis}) · after ${s.fee}% fee, €${s.post} postage, €${s.pack} packaging, keeping your €${s.floor} floor</small>`;
+      payEl.className="paycard";
+      payEl.innerHTML = `<div class="paydot"></div><div class="paylabel">PAY UP TO</div><div class="payval">€${maxBuy}</div><div class="paysub">and it's still worth flipping after postage and packaging.</div>`;
     }
   }
-  updateMaxBuy();
-
-  // Price-tag reading: if the AI read a shop/charity price sticker, prefill "what you paid".
-  if(id.price_tag_eur){
-    input.value = id.price_tag_eur;
-    const note = document.createElement("div"); note.className = "tagnote";
-    note.innerHTML = `📎 Read <b>€${id.price_tag_eur}</b> off the price tag — change it if that's not what you paid`;
-    input.closest(".paid").insertBefore(note, vEl);
-    updateVerdict();
+  async function fetchSource(key, btn){
+    const label=btn.innerHTML; btn.disabled=true; btn.textContent="Loading…";
+    try{
+      if(key==="vinted"){
+        const r=await fetch("/api/vinted",{method:"POST",headers:{"content-type":"application/json","x-flipscan-secret":getSecret()},body:JSON.stringify({query})});
+        if(r.status===401){ localStorage.removeItem("flipscan_secret"); throw new Error("Access code rejected — scan again to re-enter."); }
+        const d=await r.json(); if(!r.ok||d.error) throw new Error(prettyErr(d.error)||"Vinted lookup failed");
+        if(!d.count){ srcs.vinted.state="empty"; srcs.vinted.note="No Vinted listings found."; renderValue(); return; }
+        const cc=(d.country||"ie").toUpperCase();
+        Object.assign(srcs.vinted,{ state:"ready", mid:d.anchor, low:d.low, high:d.high, count:d.count, confidence:d.confidence, tight:d.tight, basis:`what Vinted ${cc} sellers ask`, priceSource:"Vinted", note:`Vinted ${cc} asking prices — priced off the lower third.`, examples:compExamples(d.examples,"vinted."+(d.country||"ie")) });
+      } else {
+        const r=await fetch("/api/sold",{method:"POST",headers:{"content-type":"application/json","x-flipscan-secret":getSecret()},body:JSON.stringify({query})});
+        if(r.status===401){ localStorage.removeItem("flipscan_secret"); throw new Error("Access code rejected — scan again to re-enter."); }
+        const d=await r.json(); if(!r.ok||d.error) throw new Error(prettyErr(d.error)||"sold lookup failed");
+        if(!d.count){ srcs.sold.state="empty"; srcs.sold.note="No recent eBay sales found."; renderValue(); return; }
+        const ccy=d.currency, rate=RATE[ccy]||1;
+        const sconf=d.count>=8 ? ((d.high!=null&&d.low!=null&&d.median>0&&(d.high-d.low)<=d.median*1.5)?"high":"medium") : (d.count>=3?"medium":"low");
+        Object.assign(srcs.sold,{ state:"ready", mid:d.median*rate, low:d.low*rate, high:d.high*rate, count:d.count, confidence:sconf, tight:sconf==="high", basis:"what it actually sold for", priceSource:"eBay sold", note:"Real eBay sold prices.", examples:compExamples(d.examples,"ebay sold") });
+      }
+      if(viewed===key){ renderValue(); drive(srcs[key]); updateMaxBuy(); updateVerdict(); }
+      else renderValue();
+    }catch(e){ btn.disabled=false; btn.innerHTML=label; alert(e.message); }
   }
 
-  // On-demand Vinted (IE) asking comps (Apify) — your actual selling market, so it
-  // re-bases Max Buy + the verdict on Vinted. Shown as a SEPARATE band from eBay.
-  const vintedBtn = el.querySelector(".vintedbtn"), vbEl = el.querySelector(".vintedband");
-  vintedBtn.addEventListener("click", async ()=>{
-    vintedBtn.disabled=true; const o=vintedBtn.innerHTML; vintedBtn.textContent="Checking Vinted…";
-    try {
-      const r = await fetch("/api/vinted",{ method:"POST", headers:{ "content-type":"application/json", "x-flipscan-secret":getSecret() },
-        body: JSON.stringify({ query: id.search_query || [id.brand,id.item_type,id.era].filter(Boolean).join(" ") }) });
-      if(r.status===401){ localStorage.removeItem("flipscan_secret"); throw new Error("Access code rejected — scan again to re-enter."); }
-      const d = await r.json();
-      if(!r.ok || d.error) throw new Error(prettyErr(d.error) || "Vinted lookup failed");
-      if(!d.count){ vintedBtn.disabled=false; vintedBtn.textContent="No Vinted listings found"; return; }
-      const cc = (d.country||"ie").toUpperCase();
-      vbEl.innerHTML = `<div class="band vinted"><div class="band-h" style="color:#2fd4c6">🛒 Selling on Vinted ${cc} for about this</div>
-        <div class="cbadge-row">${compBadge(d.confidence,d.count,d.tight)}</div>
-        <div class="band-row"><div class="band-med" style="color:#2fd4c6">${fmt(d.anchor,'EUR')}</div>
-        <div class="band-lohi">a fair ask to work off<br>most sit ${fmt(d.low,'EUR')}–${fmt(d.high,'EUR')}</div></div>`
-        + examplesHtml(d.examples) + `</div>`;
-      resaleEur = d.anchor; basis = `what Vinted ${cc} sellers ask`;  // Vinted is EUR, no conversion
-      priceSource = "Vinted"; bandLow = d.low; bandHigh = d.high;
-      vintedBtn.style.display="none";
-      updateMaxBuy(); updateVerdict();
-    } catch(e){ vintedBtn.disabled=false; vintedBtn.innerHTML=o; alert(e.message); }
-  });
+  tabsEl.querySelectorAll("button").forEach(b=> b.addEventListener("click", ()=>{
+    viewed=b.dataset.src; const s=srcs[viewed]; renderValue();
+    if(s.state==="ready"){ drive(s); updateMaxBuy(); updateVerdict(); }
+  }));
 
-  // On-demand real SOLD prices (SoldComps) — spends 1 of your 100/month.
-  const soldBtn = el.querySelector(".soldbtn");
-  soldBtn.addEventListener("click", async ()=>{
-    soldBtn.disabled = true; const orig = soldBtn.innerHTML; soldBtn.textContent = "Checking real sales…";
-    try {
-      const r = await fetch("/api/sold", { method:"POST", headers:{ "content-type":"application/json", "x-flipscan-secret":getSecret() },
-        body: JSON.stringify({ query: id.search_query || [id.brand,id.item_type,id.era].filter(Boolean).join(" ") }) });
-      if(r.status===401){ localStorage.removeItem("flipscan_secret"); throw new Error("Access code rejected — scan again to re-enter."); }
-      const d = await r.json();
-      if(!r.ok || d.error) throw new Error(prettyErr(d.error) || "sold lookup failed");
-      if(!d.count){ soldBtn.disabled=false; soldBtn.textContent = "No recent sales found"; return; }
-      const ccy = d.currency;
-      resaleEur = d.median * (RATE[ccy]||1); basis = `what it actually sold for`;
-      priceSource = "eBay sold"; bandLow = d.low*(RATE[ccy]||1); bandHigh = d.high*(RATE[ccy]||1);
-      const sconf = d.count>=8 ? ((d.high!=null&&d.low!=null&&d.median>0&&(d.high-d.low)<=d.median*1.5)?"high":"medium") : (d.count>=3?"medium":"low");
-      const bandEl = el.querySelector(".band");
-      bandEl.innerHTML = `<div class="band-h" style="color:var(--good)">✅ Actually sold for this</div>
-        <div class="cbadge-row">${compBadge(sconf,d.count,sconf==="high")}</div>
-        <div class="band-row"><div class="band-med">${fmt(d.median,ccy)}</div><div class="band-lohi">most went for<br>${fmt(d.low,ccy)}–${fmt(d.high,ccy)}</div></div>`
-        + examplesHtml(d.examples);
-      soldBtn.style.display = "none";
-      updateMaxBuy(); updateVerdict();
-    } catch(e){ soldBtn.disabled=false; soldBtn.innerHTML = orig; alert(e.message); }
-  });
+  renderValue(); updateMaxBuy();
+  input.addEventListener("input", updateVerdict);
+  el.querySelector(".rback").addEventListener("click", ()=>window.scrollTo({top:0,behavior:"smooth"}));
+  el.querySelector(".scanagain").addEventListener("click", ()=>window.scrollTo({top:0,behavior:"smooth"}));
+
+  // Price-tag reading: if the AI read a shop/charity price sticker, prefill "what you paid".
+  if(id.price_tag_eur){ input.value=id.price_tag_eur; const f=el.querySelector(".tagflag"); if(f) f.style.display="inline"; updateVerdict(); }
+
+  // (Vinted IE + eBay sold prices are fetched on demand via fetchSource() into the source tabs above.)
 
   // On-demand priced shop matches (SerpApi Google Lens) — needs the original photo.
   const lensBtn = el.querySelector(".lensbtn"), lensOut = el.querySelector(".lensresults");
@@ -502,7 +613,7 @@ function renderCard(data, el, n, img){
       const d = await r.json();
       if(!r.ok || d.error) throw new Error(prettyErr(d.error) || "shop search failed");
       if(!d.matches || !d.matches.length){ lensBtn.disabled=false; lensBtn.textContent="No shop matches found"; return; }
-      lensOut.innerHTML = `<div class="band-h" style="margin-bottom:8px">🛍️ Same/similar in shops</div><div class="examples">`
+      lensOut.innerHTML = `<div class="diglabel" style="margin:12px 0 8px">SAME / SIMILAR IN SHOPS</div><div class="examples">`
         + d.matches.map(m=>`<a class="ex" href="${esc(m.url)}" target="_blank" rel="noopener">${m.image?`<img src="${esc(m.image)}" alt="">`:`<span style="width:44px"></span>`}<span class="t"><b>${esc(m.source||"")}</b><br><span style="color:var(--muted)">${esc(m.title||"")}</span></span>${m.price?`<span class="p">${esc(m.price)}</span>`:""}</a>`).join("")
         + `</div>`;
       lensBtn.style.display="none";
@@ -520,7 +631,7 @@ function renderCard(data, el, n, img){
       const d = await r.json();
       if(!r.ok || d.error) throw new Error(prettyErr(d.error) || "reverse image search failed");
       if((!d.pages || !d.pages.length) && !d.best_guess){ webBtn.disabled=false; webBtn.textContent="Nothing matched online — try a clearer photo"; return; }
-      webOut.innerHTML = `<div class="band-h" style="margin-bottom:8px">🌐 Spotted around the web</div>`
+      webOut.innerHTML = `<div class="diglabel" style="margin:12px 0 8px">SPOTTED AROUND THE WEB</div>`
         + (d.best_guess ? `<div class="notes" style="font-style:normal;margin-bottom:8px">Looks like <b>${esc(d.best_guess)}</b></div>` : "")
         + (d.pages&&d.pages.length ? `<div class="examples">`+d.pages.map(p=>`<a class="ex" href="${esc(p.url)}" target="_blank" rel="noopener"><span class="t"><b>${esc(p.site)}</b><br><span style="color:var(--muted)">${esc(p.title)}</span></span>${p.full?`<span class="p" style="font-size:.62rem;color:var(--good)">exact</span>`:`<span class="p" style="font-size:.62rem;color:var(--faint)">similar</span>`}</a>`).join("")+`</div>` : `<div class="notes" style="font-style:normal">No exact source pages found.</div>`);
       webBtn.style.display="none";
@@ -540,8 +651,8 @@ function renderCard(data, el, n, img){
       const r = await fetch("/api/log",{ method:"POST", headers:{ "content-type":"application/json", "x-flipscan-secret":getSecret() }, body: JSON.stringify({ action:"save", record }) });
       if(r.status===401){ localStorage.removeItem("flipscan_secret"); throw new Error("Access code rejected — scan again to re-enter."); }
       const d = await r.json(); if(!r.ok || d.error) throw new Error(prettyErr(d.error) || "save failed");
-      logBtn.textContent = "✓ Saved — pop the sell price in later (📋)";
-    } catch(e){ logBtn.disabled=false; logBtn.textContent="💾 Log purchase"; alert(e.message); }
+      logBtn.textContent = "✓ Saved to Flips"; logBtn.classList.add("saved");
+    } catch(e){ logBtn.disabled=false; logBtn.textContent="Log it as bought"; alert(e.message); }
   });
 }
 </script>
