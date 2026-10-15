@@ -656,6 +656,27 @@ function renderCard(data, el, n, img){
     } catch(e){ logBtn.disabled=false; logBtn.textContent="Log it as bought"; alert(e.message); }
   });
 }
+
+// ---- replay hook: render a SAVED scan response through the real card code, no API.
+// Testing only — runs ONLY on localhost/file and ONLY when ?replay=<path> is present.
+// No effect in production. Harness also calls window.replayScan(data) directly.
+function replayScan(data){
+  try{ document.querySelectorAll(".head,.hero,.viewfinder,.thumbstrip,.toggle,.scanbtn,.status,.tabbar,#settings").forEach(e=>e.style.display="none"); }catch{}
+  $("results").innerHTML="";
+  const el=document.createElement("div"); $("results").appendChild(el);
+  renderCard(data||{}, el, null, (data&&data.__img)||null);
+}
+window.replayScan=replayScan;
+(function(){
+  try{
+    const host=location.hostname;
+    const local = host==="localhost"||host==="127.0.0.1"||location.protocol==="file:";
+    if(!local) return;
+    const p=new URLSearchParams(location.search).get("replay");
+    if(!p) return;
+    fetch(p).then(r=>r.json()).then(replayScan).catch(e=>{ const d=document.createElement("div"); d.className="err"; d.textContent="replay failed: "+e.message; $("results").appendChild(d); });
+  }catch{}
+})();
 </script>
 </body>
 </html>
