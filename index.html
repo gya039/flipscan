@@ -109,6 +109,13 @@
   .logbtn{width:100%;margin-top:10px;background:var(--surface-2);border:1px solid var(--line-strong);color:var(--ink);border-radius:12px;padding:12px;font-weight:700;font-size:.9rem;cursor:pointer;transition:border-color .15s}
   .logbtn:hover{border-color:var(--muted)}
   .logbtn:disabled{opacity:.6}
+  .vintedband{margin-top:14px}
+  .vintedband:empty{margin-top:0}
+  .band.vinted{margin-top:0;border-top:0;background:rgba(47,212,198,.06);border:1px solid rgba(47,212,198,.35);border-radius:14px;padding:14px 15px}
+  .vintedbtn{width:100%;margin-top:6px;background:rgba(47,212,198,.08);border:1px solid #2fd4c6;color:#2fd4c6;border-radius:12px;padding:12px;font-weight:700;font-size:.9rem;cursor:pointer;transition:background .15s}
+  .vintedbtn:hover{background:rgba(47,212,198,.16)}
+  .vintedbtn small{font-weight:400;color:var(--faint);margin-left:6px}
+  .vintedbtn:disabled{opacity:.6}
   .lensbtn,.webbtn{width:100%;margin-top:10px;background:var(--surface-2);border:1px solid var(--line-strong);color:var(--ink);border-radius:12px;padding:12px;font-weight:700;font-size:.9rem;cursor:pointer;transition:border-color .15s}
   .lensbtn{margin-top:14px}
   .lensbtn:hover,.webbtn:hover{border-color:var(--accent)}
@@ -239,7 +246,7 @@ async function post(images){
   if(!res.ok || data.error) throw new Error(prettyErr(data.error) || ("HTTP "+res.status));
   return data;
 }
-function prettyErr(e){ return ({ identify_timeout:"the AI timed out — try again", identify_truncated:"the AI reply was cut off — try again", identify_failed:"couldn't read the photo", too_many_images:"max 5 photos per item", image_too_large:"a photo was too big", payload_too_large:"too much image data", bad_image_format:"unsupported image", unauthorized:"wrong access code", server_misconfigured:"app not configured (keys)", server_error:"server error", sold_quota:"monthly sold-lookups used up (resets next month)", sold_auth:"sold-price key invalid", sold_failed:"sold lookup failed", sold_timeout:"sold lookup timed out", no_query:"nothing to search", log_not_configured:"scan log not set up (Upstash keys)", lens_not_configured:"shop search not set up (SerpApi/Upstash keys)", lens_failed:"shop search failed", lens_timeout:"shop search timed out", lens_quota:"monthly shop-searches used up (resets next month)", web_not_configured:"reverse image search not set up (Vision key)", web_failed:"reverse image search failed", web_timeout:"reverse image search timed out" })[e] || e; }
+function prettyErr(e){ return ({ identify_timeout:"the AI timed out — try again", identify_truncated:"the AI reply was cut off — try again", identify_failed:"couldn't read the photo", too_many_images:"max 5 photos per item", image_too_large:"a photo was too big", payload_too_large:"too much image data", bad_image_format:"unsupported image", unauthorized:"wrong access code", server_misconfigured:"app not configured (keys)", server_error:"server error", sold_quota:"monthly sold-lookups used up (resets next month)", sold_auth:"sold-price key invalid", sold_failed:"sold lookup failed", sold_timeout:"sold lookup timed out", no_query:"nothing to search", log_not_configured:"scan log not set up (Upstash keys)", lens_not_configured:"shop search not set up (SerpApi/Upstash keys)", lens_failed:"shop search failed", lens_timeout:"shop search timed out", lens_quota:"monthly shop-searches used up (resets next month)", web_not_configured:"reverse image search not set up (Vision key)", web_failed:"reverse image search failed", web_timeout:"reverse image search timed out", vinted_not_configured:"Vinted lookup not set up (Apify key)" })[e] || e; }
 
 function resize(file,max,q){ return new Promise((res,rej)=>{ const img=new Image(); img.onload=()=>{ let {width:w,height:h}=img; if(Math.max(w,h)>max){ const r=max/Math.max(w,h); w=Math.round(w*r); h=Math.round(h*r);} const c=document.createElement("canvas"); c.width=w;c.height=h; c.getContext("2d").drawImage(img,0,0,w,h); res(c.toDataURL("image/jpeg",q)); }; img.onerror=rej; img.src=URL.createObjectURL(file); }); }
 function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
@@ -305,6 +312,9 @@ function renderCard(data, el, n, img){
     html += `</div>`;
   }
 
+  // ---- Vinted (IE) band: filled on demand, shown SEPARATELY from the eBay band ----
+  html += `<div class="vintedband"></div>`;
+
   // ---- max buy price: the decision aid, shown BEFORE you commit a cost ----
   html += `<div class="maxbuy" style="display:none"></div>`;
 
@@ -315,7 +325,8 @@ function renderCard(data, el, n, img){
   html += `<button class="logbtn" type="button">💾 Log purchase</button>`;
 
   // ---- dig deeper: optional research, folded away so it doesn't crowd the decision ----
-  html += `<details class="dig"><summary>Dig deeper — real sold price, shops &amp; web</summary>
+  html += `<details class="dig"><summary>Dig deeper — Vinted prices, real sold price, shops &amp; web</summary>
+    <button class="vintedbtn" type="button">🛒 Check Vinted prices (IE) <small>your market · ~€0.03</small></button>
     <button class="soldbtn" type="button">💷 What did it really sell for? <small>1 of 100 this month</small></button>
     <button class="lensbtn" type="button">🛍️ Find it in shops — with prices</button><div class="lensresults"></div>
     <button class="webbtn" type="button">🌐 Reverse image search the web</button><div class="webresults"></div>
@@ -368,6 +379,30 @@ function renderCard(data, el, n, img){
     }
   }
   updateMaxBuy();
+
+  // On-demand Vinted (IE) asking comps (Apify) — your actual selling market, so it
+  // re-bases Max Buy + the verdict on Vinted. Shown as a SEPARATE band from eBay.
+  const vintedBtn = el.querySelector(".vintedbtn"), vbEl = el.querySelector(".vintedband");
+  vintedBtn.addEventListener("click", async ()=>{
+    vintedBtn.disabled=true; const o=vintedBtn.innerHTML; vintedBtn.textContent="Checking Vinted…";
+    try {
+      const r = await fetch("/api/vinted",{ method:"POST", headers:{ "content-type":"application/json", "x-flipscan-secret":getSecret() },
+        body: JSON.stringify({ query: id.search_query || [id.brand,id.item_type,id.era].filter(Boolean).join(" ") }) });
+      if(r.status===401){ localStorage.removeItem("flipscan_secret"); throw new Error("Access code rejected — scan again to re-enter."); }
+      const d = await r.json();
+      if(!r.ok || d.error) throw new Error(prettyErr(d.error) || "Vinted lookup failed");
+      if(!d.count){ vintedBtn.disabled=false; vintedBtn.textContent="No Vinted listings found"; return; }
+      const cc = (d.country||"ie").toUpperCase();
+      vbEl.innerHTML = `<div class="band vinted"><div class="band-h" style="color:#2fd4c6">🛒 Selling on Vinted ${cc} for about this</div>
+        <div class="cbadge-row">${compBadge(d.confidence,d.count,d.tight)}</div>
+        <div class="band-row"><div class="band-med" style="color:#2fd4c6">${fmt(d.anchor,'EUR')}</div>
+        <div class="band-lohi">a fair ask to work off<br>most sit ${fmt(d.low,'EUR')}–${fmt(d.high,'EUR')}</div></div>`
+        + examplesHtml(d.examples) + `</div>`;
+      resaleEur = d.anchor; basis = `what Vinted ${cc} sellers ask`;  // Vinted is EUR, no conversion
+      vintedBtn.style.display="none";
+      updateMaxBuy(); updateVerdict();
+    } catch(e){ vintedBtn.disabled=false; vintedBtn.innerHTML=o; alert(e.message); }
+  });
 
   // On-demand real SOLD prices (SoldComps) — spends 1 of your 100/month.
   const soldBtn = el.querySelector(".soldbtn");

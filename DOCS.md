@@ -328,5 +328,15 @@ On a comps failure it is `{ error: "comps_failed" }`; with no eBay keys it is `n
   1–2 comps are still shown as clickable evidence but flagged a guess with the AI
   estimate carrying the price. Up to 6 comps listed, every one a tappable link. The
   SoldComps band shows the same badge. `summarise()` returns `confidence`/`tight`.
+- **v1.1** — **Vinted (IE) comps** (deep-dive rec #2). New on-demand button
+  **"🛒 Check Vinted prices (IE)"** (`api/vinted.js`) → Apify actor
+  `epicscrapers/vinted-search-scraper` via `run-sync-get-dataset-items` (`APIFY_TOKEN`).
+  Searches **vinted.ie** first, falls back to **vinted.fr** if IE returns <8 (both EUR).
+  Asking prices (Vinted has no sold data), 30th-percentile anchor, same confidence badge.
+  Shown as a **separate teal band** from the eBay band; because Vinted is the actual
+  selling market, loading it **re-bases Max Buy + the verdict** on the Vinted number.
+  On-demand (not per-scan) because Apify is slow + paid (~€0.03/lookup); results
+  **cached 24h in Upstash**. `maxDuration=60` on the function. Graceful: a failure just
+  leaves the eBay band as-is. NOTE: scraping Vinted breaches their ToS — personal use only.
 
 _Yan's personal reselling tool — separate from the Let's Get Nessie project it sits next to on disk._
