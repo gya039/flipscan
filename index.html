@@ -111,6 +111,20 @@
   .lensresults,.webresults{margin-top:12px}
   .lensresults:empty,.webresults:empty{margin-top:0}
 
+  .maxbuy{margin-top:14px;background:rgba(203,242,78,.07);border:1px solid var(--line-strong);border-radius:14px;padding:13px 15px;font-size:1rem;font-weight:700}
+  .maxbuy b{font-family:var(--display);font-size:1.3rem;color:var(--accent)}
+  .maxbuy.none b{color:var(--bad)}
+  .maxbuy span{font-weight:400;color:var(--muted);font-size:.86rem}
+  .maxbuy small{display:block;font-weight:400;color:var(--faint);font-size:.72rem;margin-top:5px;line-height:1.45}
+
+  .dig{margin-top:16px;border-top:1px solid var(--line);padding-top:6px}
+  .dig > summary{cursor:pointer;color:var(--muted);font-weight:700;font-size:.9rem;padding:9px 2px;list-style:none;user-select:none}
+  .dig > summary::-webkit-details-marker{display:none}
+  .dig > summary::before{content:"▸";color:var(--faint);margin-right:7px;display:inline-block;transition:transform .15s}
+  .dig[open] > summary::before{transform:rotate(90deg)}
+  .dig[open] > summary{color:var(--ink)}
+  .dig .soldbtn{margin-top:6px}
+
   .links{margin-top:14px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
   .links a{text-align:center;text-decoration:none;font-weight:700;font-size:.82rem;padding:12px 6px;border-radius:12px;border:1px solid var(--line-strong);color:var(--ink);background:var(--surface-2);transition:border-color .15s,transform .08s}
   .links a:hover{border-color:var(--accent);transform:translateY(-1px)}
@@ -270,18 +284,25 @@ function renderCard(data, el, n, img){
     html += `<div class="band"><div class="band-h">Rough price</div><div class="notes" style="font-style:normal">${txt}</div></div>`;
   }
 
-  html += `<button class="lensbtn" type="button">🛍️ Find it in shops — with prices</button><div class="lensresults"></div>`;
-  html += `<button class="webbtn" type="button">🌐 Reverse image search the web</button><div class="webresults"></div>`;
+  // ---- max buy price: the decision aid, shown BEFORE you commit a cost ----
+  html += `<div class="maxbuy" style="display:none"></div>`;
 
-  html += `<button class="soldbtn" type="button">💷 What did it really sell for? <small>1 of 100 this month</small></button>`;
+  // ---- what you paid -> verdict (the primary decision, kept front-and-centre) ----
   html += `<div class="paid"><label>What you paid</label>
     <div class="row"><span class="cur">€</span><input type="number" inputmode="decimal" placeholder="e.g. 6" /></div>
     <div class="verdict"></div></div>`;
   html += `<button class="logbtn" type="button">💾 Log purchase</button>`;
-  html += `<div class="links">
-    <a href="https://www.ebay.co.uk/sch/i.html?_nkw=${q}&LH_Sold=1&LH_Complete=1" target="_blank" rel="noopener">eBay<small>sold</small></a>
-    <a href="https://www.vinted.ie/catalog?search_text=${q}&order=price_high_to_low" target="_blank" rel="noopener">Vinted<small>listings</small></a>
-    <a href="https://www.depop.com/search/?q=${q}" target="_blank" rel="noopener">Depop<small>listings</small></a></div>`;
+
+  // ---- dig deeper: optional research, folded away so it doesn't crowd the decision ----
+  html += `<details class="dig"><summary>Dig deeper — real sold price, shops &amp; web</summary>
+    <button class="soldbtn" type="button">💷 What did it really sell for? <small>1 of 100 this month</small></button>
+    <button class="lensbtn" type="button">🛍️ Find it in shops — with prices</button><div class="lensresults"></div>
+    <button class="webbtn" type="button">🌐 Reverse image search the web</button><div class="webresults"></div>
+    <div class="links">
+      <a href="https://www.ebay.co.uk/sch/i.html?_nkw=${q}&LH_Sold=1&LH_Complete=1" target="_blank" rel="noopener">eBay<small>sold</small></a>
+      <a href="https://www.vinted.ie/catalog?search_text=${q}&order=price_high_to_low" target="_blank" rel="noopener">Vinted<small>listings</small></a>
+      <a href="https://www.depop.com/search/?q=${q}" target="_blank" rel="noopener">Depop<small>listings</small></a></div>
+  </details>`;
 
   el.innerHTML = html;
 
@@ -305,6 +326,28 @@ function renderCard(data, el, n, img){
   }
   input.addEventListener("input", updateVerdict);
 
+  // ---- Max Buy Price: most you can pay and still make a worthwhile flip ----
+  // Same maths as the verdict, solved for cost. "Worth it" = keep 1.6x your money after
+  // costs AND clear your profit floor — whichever caps you first.
+  const mbEl = el.querySelector(".maxbuy");
+  function updateMaxBuy(){
+    if(resaleEur==null){ mbEl.style.display="none"; return; }
+    const s = costs();
+    const afterCosts = resaleEur - resaleEur*(s.fee/100) - s.post - s.pack;  // value in hand before cost
+    const maxBuy = Math.floor(Math.min(afterCosts/1.6, afterCosts - s.floor));
+    mbEl.style.display="block";
+    if(maxBuy < 1){
+      mbEl.className="maxbuy none";
+      mbEl.innerHTML = `💸 <b>Skip it</b> — won't clear €${s.floor} profit even if it were free
+        <small>only ~€${Math.round(afterCosts)} left after ${s.fee}% fee, €${s.post} postage, €${s.pack} packaging</small>`;
+    } else {
+      mbEl.className="maxbuy";
+      mbEl.innerHTML = `💸 Pay up to <b>€${maxBuy}</b> <span>and it's still worth flipping</span>
+        <small>sells ~€${Math.round(resaleEur)} (${basis}) · after ${s.fee}% fee, €${s.post} postage, €${s.pack} packaging, keeping your €${s.floor} floor</small>`;
+    }
+  }
+  updateMaxBuy();
+
   // On-demand real SOLD prices (SoldComps) — spends 1 of your 100/month.
   const soldBtn = el.querySelector(".soldbtn");
   soldBtn.addEventListener("click", async ()=>{
@@ -323,7 +366,7 @@ function renderCard(data, el, n, img){
         <div class="band-row"><div class="band-med">${fmt(d.median,ccy)}</div><div class="band-lohi">most went for<br>${fmt(d.low,ccy)}–${fmt(d.high,ccy)}</div></div>`
         + (d.examples&&d.examples.length ? `<div class="examples">`+d.examples.map(ex=>`<a class="ex" href="${esc(ex.url)}" target="_blank" rel="noopener">${ex.image?`<img src="${esc(ex.image)}" alt="">`:`<span style="width:42px"></span>`}<span class="t">${esc(ex.title)}</span><span class="p">${esc(ex.price)}</span></a>`).join("")+`</div>` : "");
       soldBtn.style.display = "none";
-      updateVerdict();
+      updateMaxBuy(); updateVerdict();
     } catch(e){ soldBtn.disabled=false; soldBtn.innerHTML = orig; alert(e.message); }
   });
 
