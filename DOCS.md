@@ -349,6 +349,18 @@ On a comps failure it is `{ error: "comps_failed" }`; with no eBay keys it is `n
   photo, it reads the number (converting £/$→€) and **auto-fills "what you paid"**, so
   the buy/skip verdict appears with no typing. Shows a 📎 note; always editable; `null`
   (no prefill) when no tag is readable — never a guess. One field in the Claude schema.
+- **v2.0** — **Full UI redesign** to the `research/design/` mockups (phone-first, 440px
+  frame). New design system: Bricolage Grotesque / Geist / JetBrains Mono, `#0E0F0D`
+  base, lime `#D4F25A` + teal `#5FE3D4` + green verdict, line-icon SVGs (no emoji),
+  bottom tab bar (Scan / Flips / Costs), 44px+ targets. **Scan:** viewfinder picker,
+  thumb strip, toggle, one "Scan it". **Result:** Pay-up-to tag first, then ONE value
+  card with **eBay asking / eBay sold / Vinted source tabs** (unfetched tabs show their
+  fetch button + quota inside the card; Max Buy + verdict follow the selected tab),
+  low-median-high range bar, confidence chip, horizontal comp cards, from-tag paid box,
+  verdict card, Dig-deeper (Lens/web), "Log it as bought" bar. **Flips (log):** net-profit
+  tag + sold/avg-days/in-band stats, "Which price to trust" per-source bars, All/Holding/
+  Listed/Sold filter chips, tap-to-edit rows, Export CSV. All features, calcs and API calls
+  from v1.x preserved — this was visual/layout only.
 - **v1.4** — **Outcome tracking** (deep-dive rec #4). The log now records, on save,
   `price_source` (AI / eBay asking / eBay sold / Vinted — whichever the verdict used),
   the predicted `band_low`/`band_high`, and `logged_at`. `log.html` gains per-item

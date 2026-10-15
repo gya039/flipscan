@@ -3,60 +3,97 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#101217">
-<title>FlipScan · Log</title>
+<meta name="theme-color" content="#0E0F0D">
+<title>FlipScan · Flips</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Geist:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
 <style>
-  :root{--bg:#101217;--surface:#191D26;--surface-2:#222734;--ink:#F1F3F6;--muted:#9BA3B0;--faint:#6B7382;--line:#2A303C;--line-strong:#3A4252;--accent:#CBF24E;--accent-dim:#9FBE3A;--good:#4ADE80;--bad:#F06A6A;
-    --display:"Space Grotesk",system-ui,sans-serif;--body:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;}
+  :root{
+    --bg:#0E0F0D;--surface:#181A17;--surface-2:#2A2D27;--chip:#21231F;--tabbar:#121310;
+    --ink:#F3F2EC;--muted:#A3A69C;--faint:#858979;--line:#2C2F2A;
+    --accent:#D4F25A;--accent-hi:#E6FF8A;--accent-dim:#9FBE3A;--on-accent:#12140F;
+    --teal:#5FE3D4;--teal-bg:#12312E;--blue:#8FB3FF;
+    --green:#7EF0A6;--green-bg:#173322;--bad:#F06A6A;
+    --display:"Bricolage Grotesque",system-ui,sans-serif;--body:"Geist",system-ui,-apple-system,"Segoe UI",sans-serif;--mono:"JetBrains Mono",ui-monospace,monospace;
+  }
   *{box-sizing:border-box}
-  body{margin:0;color:var(--ink);font-family:var(--body);line-height:1.5;-webkit-font-smoothing:antialiased;min-height:100vh;
-    background:radial-gradient(900px 420px at 50% -120px,rgba(203,242,78,.09),transparent 70%),var(--bg);background-attachment:fixed}
-  .wrap{max-width:620px;margin:0 auto;padding:22px 18px 70px}
-  .head{display:flex;align-items:center;justify-content:space-between;gap:10px}
-  .brandwrap{display:flex;align-items:center;gap:11px}
-  .mark{width:36px;height:36px;border-radius:11px;flex:none;display:grid;place-items:center;font-size:1.1rem;background:linear-gradient(145deg,var(--accent),var(--accent-dim));color:#0F1115;box-shadow:0 6px 18px -6px rgba(203,242,78,.5);transform:rotate(-4deg)}
-  h1{font-family:var(--display);font-size:1.45rem;margin:0;letter-spacing:-.02em;font-weight:700}h1 span{color:var(--accent)}
-  a.back{color:var(--accent);text-decoration:none;font-weight:700;font-size:.9rem;font-family:var(--display)}
-  .totals{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:16px;overflow:hidden;margin-top:18px;box-shadow:0 20px 50px -30px #000}
-  .t{background:var(--surface);padding:14px 10px}
-  .t .n{font-family:var(--display);font-size:1.4rem;font-weight:700;letter-spacing:-.01em}
-  .t .n.good{color:var(--good)} .t .n.accent{color:var(--accent)}
-  .t .l{font-size:.66rem;color:var(--faint);margin-top:3px;text-transform:uppercase;letter-spacing:.05em}
-  .acc{margin-top:12px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:13px 15px;font-size:.85rem;color:var(--muted);line-height:1.5}
-  .acc b{color:var(--ink)}
-  .rec{margin-top:10px;background:linear-gradient(180deg,var(--surface),#161a22);border:1px solid var(--line);border-radius:14px;padding:15px;box-shadow:0 16px 40px -30px #000}
-  .rec .top{display:flex;justify-content:space-between;gap:10px}
-  .rec .name{font-family:var(--display);font-weight:600}
-  .rec .sub{color:var(--faint);font-size:.76rem;margin-top:2px}
-  .rec .est{color:var(--muted);font-size:.8rem;text-align:right}
-  .rec .grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:11px}
-  .f label{font-size:.64rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faint);font-weight:600}
-  .f input{width:100%;margin-top:4px;background:var(--surface-2);border:1px solid var(--line-strong);color:var(--ink);border-radius:10px;padding:9px 11px;font-size:.9rem}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--body);line-height:1.5;-webkit-font-smoothing:antialiased}
+  .app{max-width:440px;margin:0 auto;min-height:100dvh;padding:0 0 96px}
+
+  .lhead{display:flex;align-items:flex-end;justify-content:space-between;gap:10px;padding:24px 20px 0}
+  .lhead h1{font-family:var(--display);font-weight:800;font-size:34px;letter-spacing:-.03em;line-height:1;margin:0}
+  .csv{height:40px;padding:0 14px;border-radius:12px;border:1px solid var(--line);background:var(--surface);color:var(--muted);font-family:var(--body);font-weight:600;font-size:13px;cursor:pointer}
+  .csv:hover{color:var(--ink);border-color:var(--accent)}
+
+  .netcard{margin:18px 20px 0;background:var(--accent);color:var(--on-accent);border-radius:22px;padding:18px 20px}
+  .netlabel{font-family:var(--mono);font-size:12px;font-weight:700;letter-spacing:.12em}
+  .netval{font-family:var(--mono);font-weight:700;font-size:52px;letter-spacing:-.04em;line-height:1.05;margin-top:4px}
+  .netstats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:14px;border-top:2px dashed rgba(18,20,15,.35);padding-top:12px}
+  .netstats .n{font-family:var(--mono);font-weight:700;font-size:20px}
+  .netstats .l{font-size:12px;font-weight:500}
+
+  .whichcard{margin:18px 20px 0;background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:16px 18px}
+  .wl{font-family:var(--mono);font-size:12px;letter-spacing:.12em;color:var(--muted)}
+  .wrows{display:flex;flex-direction:column;gap:12px;margin-top:12px}
+  .wrow{display:grid;grid-template-columns:92px minmax(0,1fr) 58px;gap:10px;align-items:center}
+  .wn{font-size:13px}
+  .wbar{height:8px;border-radius:4px;background:var(--line);position:relative}
+  .wbar>span{position:absolute;left:0;top:0;bottom:0;border-radius:4px}
+  .wp{font-family:var(--mono);font-size:13px;text-align:right}
+  .wp.muted{color:var(--faint);font-size:11px;font-family:var(--body)}
+  .whichcap{font-size:12px;color:var(--faint);margin-top:12px;line-height:1.45}
+
+  .filters{display:flex;gap:6px;margin:18px 20px 0;flex-wrap:wrap}
+  .fchip{height:36px;padding:0 14px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--muted);font-family:var(--body);font-weight:500;font-size:13px;cursor:pointer}
+  .fchip.on{background:var(--ink);color:var(--on-accent);border-color:var(--ink);font-weight:600}
+
+  .list{margin:12px 20px 0;display:flex;flex-direction:column}
+  .rowwrap{border-bottom:1px solid var(--chip)}
+  .rowwrap:last-child{border-bottom:0}
+  .row{display:flex;align-items:center;gap:12px;padding:12px 0;cursor:pointer}
+  .rthumb{width:48px;height:48px;border-radius:12px;background:var(--surface-2);flex:none}
+  .rmid{flex:1;min-width:0}
+  .rname{font-weight:600;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .rsub{font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:2px}
+  .pill{font-size:12px;font-weight:600;padding:4px 10px;border-radius:999px;white-space:nowrap;flex:none}
+  .pill.good{background:var(--green-bg);color:var(--green)}
+  .pill.bad{background:#2f1a1a;color:#F0A6A6}
+  .pill.listed{background:var(--teal-bg);color:var(--teal)}
+  .pill.hold{background:var(--chip);color:var(--muted)}
+
+  .editpanel{padding:2px 0 16px}
+  .egrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .f label{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--faint);font-weight:600}
+  .f input{width:100%;margin-top:4px;background:var(--surface-2);border:1px solid var(--line);color:var(--ink);border-radius:10px;padding:9px 11px;font-size:14px;font-family:var(--body)}
   .f input:focus{outline:2px solid var(--accent);outline-offset:1px;border-color:transparent}
-  .rec .foot{display:flex;justify-content:space-between;align-items:center;margin-top:11px}
-  .profit{font-family:var(--display);font-weight:700}.profit.pos{color:var(--good)}.profit.neg{color:var(--bad)}.profit.held{color:var(--faint);font-weight:400;font-size:.8rem;font-family:var(--body)}
-  .del{background:none;border:0;color:var(--faint);cursor:pointer;font-size:.8rem;border-radius:8px;padding:4px 8px}
-  .del:hover{color:var(--bad)}
-  .empty,.err{color:var(--muted);margin-top:20px;font-size:.9rem;line-height:1.5}
-  .err{color:var(--bad)}
-  .bar{display:flex;justify-content:flex-end;margin-top:16px}
-  .bar + .totals{margin-top:10px}
-  .csv{background:var(--surface-2);border:1px solid var(--line-strong);color:var(--ink);border-radius:10px;padding:8px 13px;font-weight:700;font-size:.8rem;cursor:pointer;font-family:var(--body)}
-  .csv:hover{border-color:var(--accent)}
-  .acc .muted{color:var(--faint)}
-  .acc .srhead{margin-top:9px;color:var(--faint);text-transform:uppercase;font-size:.64rem;letter-spacing:.05em}
-  .acc .sr{margin-top:4px}
   .f input[type=date]::-webkit-calendar-picker-indicator{filter:invert(.75)}
+  .erow{display:flex;justify-content:space-between;align-items:center;margin-top:11px}
+  .esrc{font-family:var(--mono);font-size:11px;color:var(--faint)}
+  .del{background:none;border:0;color:var(--faint);font-size:12px;cursor:pointer;border-radius:8px;padding:4px 8px;font-family:var(--body)}
+  .del:hover{color:var(--bad)}
+
+  .empty,.err{color:var(--muted);margin:20px;font-size:14px;line-height:1.5}
+  .err{color:var(--bad)}
+
+  .tabbar{position:fixed;left:0;right:0;bottom:0;z-index:40;border-top:1px solid var(--line);background:var(--tabbar);display:grid;grid-template-columns:repeat(3,1fr);padding:8px 12px calc(10px + env(safe-area-inset-bottom));max-width:440px;margin:0 auto}
+  .tabbar a{display:flex;flex-direction:column;align-items:center;gap:4px;padding:6px 0;text-decoration:none;color:var(--faint);font-size:12px;font-weight:500;cursor:pointer}
+  .tabbar a.on{color:var(--accent);font-weight:600}
 </style>
 </head>
 <body>
-<div class="wrap">
-  <div class="head"><div class="brandwrap"><div class="mark">⚡</div><h1>Flip<span>Scan</span> · Log</h1></div><a class="back" href="/">← Scan</a></div>
+<div class="app">
+  <div class="lhead"><h1>Your flips</h1><button class="csv" id="csv">Export CSV</button></div>
   <div id="totals"></div>
+  <div id="which"></div>
+  <div id="filters"></div>
   <div id="list"></div>
+
+  <nav class="tabbar">
+    <a href="/"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3"/></svg>Scan</a>
+    <a class="on"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 20V10M12 20V4M19 20v-7"/></svg>Flips</a>
+    <a href="/?costs=1"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>Costs</a>
+  </nav>
 </div>
 <script>
 const $=(id)=>document.getElementById(id);
@@ -67,13 +104,12 @@ function eur(v){ return v==null||isNaN(v)?"—":"€"+Math.round(v); }
 function today(){ return new Date().toISOString().slice(0,10); }
 function costs(){ try{ return JSON.parse(localStorage.getItem("flipscan_costs")||"{}"); }catch{ return {}; } }
 function defPost(){ const p=parseFloat(costs().post); return isFinite(p)?p:0; }
-// Postage: per-item value if set, else the default from cost settings.
 function postageOf(r){ const v=(r.postage===undefined||r.postage===null||r.postage==="")?defPost():+r.postage; return isFinite(v)?v:0; }
-// Profit = sold − paid − postage. Vinted seller fee is 0, so no fee term.
-function profitOf(r){ if(r.sold_eur==null||isNaN(r.sold_eur)) return null; return (+r.sold_eur)-((+r.paid)||0)-postageOf(r); }
+function profitOf(r){ if(r.sold_eur==null||isNaN(r.sold_eur)) return null; return (+r.sold_eur)-((+r.paid)||0)-postageOf(r); } // Vinted seller fee = 0
 function daysBetween(a,b){ if(!a||!b) return null; const d=(new Date(b)-new Date(a))/86400000; return isFinite(d)?Math.round(d):null; }
+function statusOf(r){ if(r.sold_eur!=null && !isNaN(r.sold_eur)) return "sold"; if(r.listed_on||r.platform) return "listed"; return "holding"; }
 
-let RECORDS=[];
+let RECORDS=[], FILTER="all", OPEN=null;
 
 async function api(action, extra){
   const r = await fetch("/api/log",{method:"POST",headers:{"content-type":"application/json","x-flipscan-secret":getSecret()},body:JSON.stringify({action,...extra})});
@@ -81,10 +117,9 @@ async function api(action, extra){
   const d=await r.json(); if(!r.ok||d.error) throw new Error(d.error||"error");
   return d;
 }
-
 let debounce;
 function saveField(id, patch){ clearTimeout(debounce); debounce=setTimeout(()=>api("update",{id,patch}).then(load).catch(()=>{}),600); }
-async function del(id){ if(!confirm("Delete this record?")) return; await api("delete",{id}); load(); }
+async function del(id){ if(!confirm("Delete this record?")) return; await api("delete",{id}); OPEN=null; load(); }
 
 function exportCsv(){
   const cols=["id","logged_at","ts","brand","item_type","era","confidence","price_source","basis","est_eur","band_low","band_high","paid","postage","platform","listed_on","sold_on","sold_eur","profit"];
@@ -97,93 +132,102 @@ function exportCsv(){
     return cell(r[c]);
   }).join(",")); });
   const blob=new Blob([lines.join("\n")],{type:"text/csv"});
-  const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="flipscan-log-"+today()+".csv"; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="flipscan-flips-"+today()+".csv"; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+}
+
+const SRC_ORDER=[["Vinted","Vinted IE","var(--teal)"],["eBay sold","eBay sold","var(--blue)"],["eBay asking","eBay asking","var(--accent)"],["AI","AI estimate","var(--faint)"]];
+
+function editHtml(r){
+  const dp=defPost();
+  return `<div class="editpanel">
+    <div class="egrid">
+      <div class="f"><label>Paid €</label><input type="number" inputmode="decimal" value="${r.paid!=null?r.paid:""}" data-id="${r.id}" data-k="paid"></div>
+      <div class="f"><label>Postage €</label><input type="number" inputmode="decimal" value="${r.postage!=null&&r.postage!==""?r.postage:""}" data-id="${r.id}" data-k="postage" placeholder="${dp}"></div>
+      <div class="f"><label>Sold for €</label><input type="number" inputmode="decimal" value="${r.sold_eur!=null?r.sold_eur:""}" data-id="${r.id}" data-k="sold_eur" placeholder="when it sells"></div>
+      <div class="f"><label>Platform</label><input type="text" value="${esc(r.platform||"")}" data-id="${r.id}" data-k="platform" placeholder="Vinted / eBay"></div>
+      <div class="f"><label>Listed on</label><input type="date" value="${esc(r.listed_on||"")}" data-id="${r.id}" data-k="listed_on"></div>
+      <div class="f"><label>Sold on</label><input type="date" value="${esc(r.sold_on||"")}" data-id="${r.id}" data-k="sold_on"></div>
+    </div>
+    <div class="erow"><span class="esrc">est ${eur(r.est_eur)} · ${esc(r.price_source||r.basis||"—")}</span><button class="del" data-del="${r.id}">delete</button></div>
+  </div>`;
+}
+function rowHtml(r){
+  const st=statusOf(r);
+  let sub, pill;
+  if(st==="sold"){ const dd=daysBetween(r.listed_on,r.sold_on), p=profitOf(r);
+    sub=`€${r.paid!=null?Math.round(r.paid):"—"} → €${Math.round(r.sold_eur)}${dd!=null&&dd>=0?` · ${dd} day${dd===1?"":"s"}`:""}`;
+    pill=`<div class="pill ${p>=0?"good":"bad"}">Sold ${p>=0?"+":"−"}€${Math.abs(Math.round(p))}</div>`;
+  } else if(st==="listed"){
+    sub=`€${r.paid!=null?Math.round(r.paid):"—"} · listed${r.platform?" on "+esc(r.platform):""}`;
+    pill=`<div class="pill listed">Listed</div>`;
+  } else {
+    sub=`€${r.paid!=null?Math.round(r.paid):"—"} · bought ${esc(r.logged_at||(r.ts||"").slice(0,10)||"")}`;
+    pill=`<div class="pill hold">Holding</div>`;
+  }
+  return `<div class="rowwrap">
+    <div class="row" data-row="${r.id}"><div class="rthumb"></div><div class="rmid"><div class="rname">${esc(r.brand||"Unknown")} ${esc(r.item_type||"")}</div><div class="rsub">${sub}</div></div>${pill}</div>
+    ${OPEN===r.id?editHtml(r):""}
+  </div>`;
 }
 
 function render(records){
   RECORDS=records;
   const byId={}; records.forEach(r=>byId[r.id]=r);
 
-  // ---- totals ----
+  // ---- totals + stats ----
   let spent=0, sold=0, realised=0, soldCount=0;
   records.forEach(r=>{ spent+=(+r.paid)||0; const pr=profitOf(r); if(pr!=null){ sold+=+r.sold_eur; realised+=pr; soldCount++; } });
+  const soldRecs=records.filter(r=>r.sold_eur!=null && !isNaN(r.sold_eur));
+  const dd=soldRecs.map(r=>daysBetween(r.listed_on,r.sold_on)).filter(d=>d!=null&&d>=0);
+  const avgDays=dd.length?Math.round(dd.reduce((a,b)=>a+b,0)/dd.length):null;
+  const banded=soldRecs.filter(r=>r.band_low!=null&&r.band_high!=null);
+  const inBand=banded.filter(r=>{const lo=Math.min(+r.band_low,+r.band_high),hi=Math.max(+r.band_low,+r.band_high);return +r.sold_eur>=lo&&+r.sold_eur<=hi;});
+  const bandPct=banded.length?Math.round(inBand.length/banded.length*100):null;
 
-  // ---- stats ----
-  const soldRecs = records.filter(r=>r.sold_eur!=null && !isNaN(r.sold_eur));
-  const dd = soldRecs.map(r=>daysBetween(r.listed_on,r.sold_on)).filter(d=>d!=null && d>=0);
-  const avgDays = dd.length ? Math.round(dd.reduce((a,b)=>a+b,0)/dd.length) : null;
-  const banded = soldRecs.filter(r=>r.band_low!=null && r.band_high!=null);
-  const inBand = banded.filter(r=>{ const lo=Math.min(+r.band_low,+r.band_high), hi=Math.max(+r.band_low,+r.band_high); return +r.sold_eur>=lo && +r.sold_eur<=hi; });
-  const bandPct = banded.length ? Math.round(inBand.length/banded.length*100) : null;
-  const bySource={};
-  soldRecs.forEach(r=>{ if(r.est_eur){ const s=r.price_source||"unknown"; (bySource[s]=bySource[s]||[]).push(Math.abs((+r.est_eur)-(+r.sold_eur))/(+r.sold_eur)); } });
+  $("totals").innerHTML = `<div class="netcard">
+    <div class="netlabel">NET PROFIT · ALL TIME</div>
+    <div class="netval">${eur(realised)}</div>
+    <div class="netstats">
+      <div><div class="n">${soldCount}</div><div class="l">sold</div></div>
+      <div><div class="n">${avgDays!=null?avgDays+"d":"—"}</div><div class="l">avg to sell</div></div>
+      <div><div class="n">${bandPct!=null?bandPct+"%":"—"}</div><div class="l">in our band</div></div>
+    </div></div>`;
 
-  let statsHtml="";
-  if(soldRecs.length){
-    const order=["eBay sold","Vinted","eBay asking","AI"];
-    const keys=Object.keys(bySource).sort((a,b)=>{ let ia=order.indexOf(a),ib=order.indexOf(b); if(ia<0)ia=99; if(ib<0)ib=99; return ia-ib; });
-    let srcRows="";
-    keys.forEach(s=>{ const arr=bySource[s];
-      srcRows += arr.length<5
-        ? `<div class="sr">${esc(s)} <span class="muted">— not enough data (${arr.length}/5)</span></div>`
-        : `<div class="sr">${esc(s)}: <b>${Math.round(arr.reduce((a,b)=>a+b,0)/arr.length*100)}% off</b> <span class="muted">(${arr.length} sold)</span></div>`;
-    });
-    statsHtml = `<div class="acc">
-      <div>⏱️ Average days to sell: <b>${avgDays!=null?avgDays+" day"+(avgDays===1?"":"s"):"—"}</b>${dd.length?` <span class="muted">(${dd.length} with dates)</span>`:` <span class="muted">(fill in Listed/Sold dates)</span>`}</div>
-      <div style="margin-top:7px">🎯 Landed inside our predicted range: <b>${bandPct!=null?bandPct+"%":"—"}</b>${banded.length?` <span class="muted">(${inBand.length}/${banded.length})</span>`:""}</div>
-      <div class="srhead">How far our price was off, by source</div>${srcRows}
-    </div>`;
-  }
+  // ---- which price to trust: per-source in-band share ----
+  const bySrc={};
+  soldRecs.forEach(r=>{ if(r.price_source && r.band_low!=null && r.band_high!=null){ const s=r.price_source; bySrc[s]=bySrc[s]||{in:0,n:0}; const lo=Math.min(+r.band_low,+r.band_high),hi=Math.max(+r.band_low,+r.band_high); bySrc[s].n++; if(+r.sold_eur>=lo&&+r.sold_eur<=hi) bySrc[s].in++; } });
+  const present=SRC_ORDER.filter(([key])=>bySrc[key]);
+  $("which").innerHTML = present.length ? `<div class="whichcard"><div class="wl">WHICH PRICE TO TRUST</div><div class="wrows">`
+    + present.map(([key,label,color])=>{ const o=bySrc[key]; if(o.n<5) return `<div class="wrow"><div class="wn">${esc(label)}</div><div class="wbar"></div><div class="wp muted">${o.n}/5</div></div>`;
+        const pct=Math.round(o.in/o.n*100); return `<div class="wrow"><div class="wn">${esc(label)}</div><div class="wbar"><span style="width:${pct}%;background:${color}"></span></div><div class="wp">${pct}%</div></div>`; }).join("")
+    + `</div><div class="whichcap">Share of each source's sold items that landed inside its predicted range (needs 5+ to rate).</div></div>` : "";
 
-  $("totals").innerHTML = `<div class="bar"><button class="csv" id="csv">⬇ Export CSV</button></div>
-    <div class="totals">
-      <div class="t"><div class="n">${records.length}</div><div class="l">logged</div></div>
-      <div class="t"><div class="n">${eur(spent)}</div><div class="l">spent</div></div>
-      <div class="t"><div class="n">${eur(sold)}</div><div class="l">sold (${soldCount})</div></div>
-      <div class="t"><div class="n ${realised>=0?'good':''}">${eur(realised)}</div><div class="l">net profit</div></div>
-    </div>${statsHtml}`;
-  $("csv").addEventListener("click", exportCsv);
+  // ---- filter chips ----
+  const counts={all:records.length, holding:0, listed:0, sold:0};
+  records.forEach(r=>counts[statusOf(r)]++);
+  const chips=[["all","All"],["holding","Holding"],["listed","Listed"],["sold","Sold"]];
+  $("filters").innerHTML = records.length ? `<div class="filters">`+chips.map(([k,l])=>`<button class="fchip ${FILTER===k?"on":""}" data-f="${k}">${l}${k!=="all"&&counts[k]?` ${counts[k]}`:""}</button>`).join("")+`</div>` : "";
 
-  if(!records.length){ $("list").innerHTML = `<div class="empty">Nothing logged yet. After a scan, hit 💾 to save what you bought — then add the sell price here when it goes.</div>`; return; }
+  // ---- list ----
+  if(!records.length){ $("list").innerHTML = `<div class="empty">Nothing logged yet. Scan something and tap "Log it as bought" — then come back here to add the sell price.</div>`; return; }
+  const shown = records.filter(r=>FILTER==="all"||statusOf(r)===FILTER);
+  $("list").innerHTML = shown.length ? `<div class="list">`+shown.map(rowHtml).join("")+`</div>` : `<div class="empty">No ${FILTER} items.</div>`;
 
-  const dpost = defPost();
-  $("list").innerHTML = records.map(r=>{
-    const profit = profitOf(r); const held = profit==null;
-    const logged = (r.logged_at || (r.ts||"").slice(0,10) || "");
-    return `<div class="rec">
-      <div class="top"><div><div class="name">${esc(r.brand||"Unknown")} · ${esc(r.item_type||"")}</div>
-        <div class="sub">${esc(logged)} ${r.era&&r.era!=="unknown"?"· "+esc(r.era):""}</div></div>
-        <div class="est">est ${eur(r.est_eur)}<br><span style="color:var(--faint)">${esc(r.price_source||r.basis||"")}</span></div></div>
-      <div class="grid">
-        <div class="f"><label>Paid €</label><input type="number" inputmode="decimal" value="${r.paid!=null?r.paid:""}" data-id="${r.id}" data-k="paid"></div>
-        <div class="f"><label>Sold for €</label><input type="number" inputmode="decimal" value="${r.sold_eur!=null?r.sold_eur:""}" data-id="${r.id}" data-k="sold_eur" placeholder="when it sells"></div>
-        <div class="f"><label>Postage €</label><input type="number" inputmode="decimal" value="${r.postage!=null&&r.postage!==""?r.postage:""}" data-id="${r.id}" data-k="postage" placeholder="${dpost}"></div>
-        <div class="f"><label>Platform</label><input type="text" value="${esc(r.platform||"")}" data-id="${r.id}" data-k="platform" placeholder="Vinted / Depop / eBay"></div>
-        <div class="f"><label>Listed on</label><input type="date" value="${esc(r.listed_on||"")}" data-id="${r.id}" data-k="listed_on"></div>
-        <div class="f"><label>Sold on</label><input type="date" value="${esc(r.sold_on||"")}" data-id="${r.id}" data-k="sold_on"></div>
-      </div>
-      <div class="foot">
-        <div class="profit ${held?'held':(profit>=0?'pos':'neg')}">${held?"still held":(profit>=0?"+":"")+eur(profit)+" profit"}</div>
-        <button class="del" data-del="${r.id}">delete</button></div>
-    </div>`;
-  }).join("");
-
+  $("list").querySelectorAll(".row[data-row]").forEach(row=> row.addEventListener("click",()=>{ const id=row.dataset.row; OPEN=OPEN===id?null:id; render(RECORDS); }));
   $("list").querySelectorAll("input[data-k]").forEach(inp=>{
     inp.addEventListener("input", ()=>{
-      const k=inp.dataset.k, id=inp.dataset.id;
-      let v = inp.value;
+      const k=inp.dataset.k, id=inp.dataset.id; let v=inp.value;
       if(k==="paid"||k==="sold_eur"||k==="postage") v = v===""?null:parseFloat(v);
       const patch={[k]:v};
-      if(k==="sold_eur" && v!=null && !isNaN(v)){        // first sold price stamps the dates
-        const rec=byId[id]||{};
-        if(!rec.sold_on) patch.sold_on = today();
-        if(!rec.listed_on) patch.listed_on = rec.logged_at || (rec.ts||"").slice(0,10) || today();
-      }
+      if(k==="sold_eur" && v!=null && !isNaN(v)){ const rec=byId[id]||{}; if(!rec.sold_on) patch.sold_on=today(); if(!rec.listed_on) patch.listed_on=rec.logged_at||(rec.ts||"").slice(0,10)||today(); }
       saveField(id,patch);
     });
   });
-  $("list").querySelectorAll("button[data-del]").forEach(b=> b.addEventListener("click",()=>del(b.dataset.del)));
+  $("list").querySelectorAll("button[data-del]").forEach(b=> b.addEventListener("click",(e)=>{ e.stopPropagation(); del(b.dataset.del); }));
 }
+
+$("csv").addEventListener("click", exportCsv);
+$("filters").addEventListener("click",(e)=>{ const b=e.target.closest(".fchip"); if(b){ FILTER=b.dataset.f; render(RECORDS); } });
 
 async function load(){
   if(!getSecret() && !askSecret()) return;

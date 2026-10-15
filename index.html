@@ -333,6 +333,7 @@ function toggleSettings(){ const s=$("settings"); const open=s.style.display==="
 $("gear").addEventListener("click", toggleSettings);
 $("tabCosts").addEventListener("click", toggleSettings);
 $("tabScan").addEventListener("click", ()=>window.scrollTo({top:0,behavior:"smooth"}));
+try{ if(new URLSearchParams(location.search).get("costs")) toggleSettings(); }catch{}
 $("saveSettings").addEventListener("click", ()=>{
   const c={ fee:num($("sFee").value,0), post:num($("sPost").value,0), pack:num($("sPack").value,0), floor:num($("sFloor").value,5) };
   try{ localStorage.setItem("flipscan_costs", JSON.stringify(c)); }catch{}
