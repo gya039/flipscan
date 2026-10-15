@@ -165,28 +165,40 @@ async function ebaySearchByImage(b64, token, market, ccy) {
   if (!r.ok) throw new Error(`eBay image ${r.status}`);
   return okItems(await r.json(), ccy);
 }
+// Confidence from evidence: how many comps AND how tight the spread is.
+//   high  = 8+ comps AND prices clustered (p10..p90 within 1.5x the median)
+//   medium= 3-7 comps, OR 8+ but prices scattered
+//   low   = under 3 comps -> treat the number as a guess
+function gradeComps(count, low, median, high) {
+  const tight = (low != null && median != null && high != null && median > 0) ? (high - low) <= median * 1.5 : false;
+  let confidence = "low";
+  if (count >= MIN_COMPS) confidence = tight ? "high" : "medium";
+  else if (count >= 3) confidence = "medium";
+  return { tight, confidence };
+}
 function summarise(items, ccy, market, used, matched) {
-  if (!items.length) return { source: matched === "image" ? "eBay image match" : "eBay active listings (asking)", visual: matched === "image", marketplace: market, query: used, count: 0, currency: ccy, reliable: false, low: null, anchor: null, median: null, high: null, examples: [] };
+  if (!items.length) return { source: matched === "image" ? "eBay image match" : "eBay active listings (asking)", visual: matched === "image", marketplace: market, query: used, count: 0, currency: ccy, reliable: false, confidence: "low", tight: false, low: null, anchor: null, median: null, high: null, examples: [] };
   const prices = items.map((i) => parseFloat(i.price.value)).sort((a, b) => a - b);
-  const anchor = pct(prices, 30);
-  // Which 4 to SHOW as examples:
+  const anchor = pct(prices, 30), low = pct(prices, 10), median = pct(prices, 50), high = pct(prices, 90);
+  // Which comps to SHOW (up to 6, every one a tappable link):
   //  - image match: eBay already ranks by VISUAL similarity, so keep that order (most
   //    similar first) — just skip wild price outliers so a freak listing doesn't headline.
-  //  - keyword match: no visual signal, so show the 4 priced closest to the anchor.
+  //  - keyword match: no visual signal, so show the ones priced closest to the anchor.
   let picked;
   if (matched === "image") {
     picked = items.filter((i) => { const v = parseFloat(i.price.value); return v >= anchor * 0.3 && v <= anchor * 3; });
-    if (picked.length < 4) picked = items; // filter too aggressive → fall back to raw order
-    picked = picked.slice(0, 4);
+    if (picked.length < 6) picked = items; // filter too aggressive → fall back to raw order
+    picked = picked.slice(0, 6);
   } else {
-    picked = [...items].sort((a, b) => Math.abs(parseFloat(a.price.value) - anchor) - Math.abs(parseFloat(b.price.value) - anchor)).slice(0, 4);
+    picked = [...items].sort((a, b) => Math.abs(parseFloat(a.price.value) - anchor) - Math.abs(parseFloat(b.price.value) - anchor)).slice(0, 6);
   }
   const examples = picked.map((i) => ({ title: i.title, price: `${i.price.value} ${i.price.currency}`, url: i.itemWebUrl, image: (i.image && i.image.imageUrl) || null, condition: i.condition || "" }));
+  const { tight, confidence } = gradeComps(prices.length, low, median, high);
   return {
     source: matched === "image" ? "eBay image match (visually similar)" : "eBay active listings (asking)",
     visual: matched === "image", marketplace: market, query: used,
     count: prices.length, currency: ccy, reliable: prices.length >= MIN_COMPS,
-    low: pct(prices, 10), anchor, median: pct(prices, 50), high: pct(prices, 90), examples,
+    confidence, tight, low, anchor, median, high, examples,
   };
 }
 async function getComps(cleanedQuery, fallbackQuery, imageB64) {

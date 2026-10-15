@@ -321,5 +321,12 @@ On a comps failure it is `{ error: "comps_failed" }`; with no eBay keys it is `n
     price** inline. Lens needs a public image URL, so `api/lens.js` stashes the photo
     in Upstash (~10-min TTL) and serves it via `api/img.js` for SerpApi to fetch —
     hence it also needs `UPSTASH_*` set. Priced results sorted first.
+- **v1.0** — **Comp evidence & confidence** (deep-dive rec #1). Every price now shows
+  **how many comps it's based on** and a **confidence badge**: 🟢 green (8+ comps, prices
+  within 1.5× the median), 🟡 amber (3–7 comps, or 8+ but prices scattered), 🔴 red
+  (<3 comps → "treat as a guess"). Comps drive the number from **3** upward (was 8);
+  1–2 comps are still shown as clickable evidence but flagged a guess with the AI
+  estimate carrying the price. Up to 6 comps listed, every one a tappable link. The
+  SoldComps band shows the same badge. `summarise()` returns `confidence`/`tight`.
 
 _Yan's personal reselling tool — separate from the Let's Get Nessie project it sits next to on disk._

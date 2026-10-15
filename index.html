@@ -79,6 +79,11 @@
   .band-row{display:flex;align-items:baseline;gap:13px;margin-top:8px}
   .band-med{font-family:var(--display);font-size:2.3rem;font-weight:700;color:var(--accent);line-height:1;letter-spacing:-.02em}
   .band-lohi{color:var(--muted);font-size:.86rem;line-height:1.35}
+  .cbadge-row{margin-top:8px}
+  .cbadge{display:inline-block;font-size:.66rem;font-weight:700;padding:3px 10px;border-radius:999px;letter-spacing:.02em}
+  .cbadge.high{background:#16331f;color:var(--good)}
+  .cbadge.med{background:#3a3417;color:var(--warn)}
+  .cbadge.low{background:#3a2020;color:#e0707c}
   .examples{margin-top:12px;display:flex;flex-direction:column;gap:7px}
   .ex{display:flex;gap:10px;align-items:center;background:var(--surface-2);border:1px solid var(--line);border-radius:12px;padding:7px;text-decoration:none;color:var(--ink);transition:border-color .15s,transform .08s}
   .ex:hover{border-color:var(--line-strong);transform:translateX(2px)}
@@ -239,6 +244,18 @@ function prettyErr(e){ return ({ identify_timeout:"the AI timed out — try agai
 function resize(file,max,q){ return new Promise((res,rej)=>{ const img=new Image(); img.onload=()=>{ let {width:w,height:h}=img; if(Math.max(w,h)>max){ const r=max/Math.max(w,h); w=Math.round(w*r); h=Math.round(h*r);} const c=document.createElement("canvas"); c.width=w;c.height=h; c.getContext("2d").drawImage(img,0,0,w,h); res(c.toDataURL("image/jpeg",q)); }; img.onerror=rej; img.src=URL.createObjectURL(file); }); }
 function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
 function fmt(v,cur){ if(v==null) return "—"; const sym=cur==="EUR"?"€":cur==="USD"?"$":cur==="GBP"?"£":""; return sym+Math.round(v); }
+// Evidence badge: how trustworthy the number is, from comp count + spread.
+function compBadge(conf,count,tight){
+  const n = `${count} comp${count===1?"":"s"}`;
+  if(conf==="high") return `<span class="cbadge high">✓ Based on ${n} · consistent</span>`;
+  if(conf==="medium") return `<span class="cbadge med">Based on ${n}${count>=8&&!tight?" · prices vary a lot":""}</span>`;
+  return `<span class="cbadge low">⚠ Only ${n} — treat as a guess</span>`;
+}
+// Every comp a tappable link.
+function examplesHtml(list){
+  if(!list||!list.length) return "";
+  return `<div class="examples">`+list.map(ex=>`<a class="ex" href="${esc(ex.url||'#')}" target="_blank" rel="noopener">${ex.image?`<img src="${esc(ex.image)}" alt="">`:`<span style="width:42px"></span>`}<span class="t">${esc(ex.title)}</span><span class="p">${esc(ex.price)}</span></a>`).join("")+`</div>`;
+}
 
 function renderCard(data, el, n, img){
   const id = data.identity||{};
@@ -262,26 +279,30 @@ function renderCard(data, el, n, img){
   if(conf==="low") html += `<div class="nudge">📸 Not sure on this one — take a close-up of the label and scan it again.</div>`;
 
   // ---- decide what the verdict rests on ----
+  // 3+ comps drive the price (with a confidence badge). 1-2 comps are shown as
+  // evidence but flagged a guess, and the AI estimate carries the number. 0 comps = estimate only.
   let resaleEur=null, basis="", cur="EUR";
-  const useComps = c && !c.error && c.reliable && c.anchor!=null;
+  const hasComps = c && !c.error && c.count>0 && c.anchor!=null;
+  const useComps = hasComps && c.count>=3;
   if(useComps){
     cur=c.currency;
-    html += `<div class="band"><div class="band-h">${c.visual?"🔍 Visually similar on eBay":"Going for about this on eBay"} · ${c.count} found</div>
+    html += `<div class="band"><div class="band-h">${c.visual?"🔍 Visually similar on eBay":"Going for about this on eBay"}</div>
+      <div class="cbadge-row">${compBadge(c.confidence,c.count,c.tight)}</div>
       <div class="band-row"><div class="band-med">${fmt(c.anchor,cur)}</div>
       <div class="band-lohi">a fair price to work off<br>most sit ${fmt(c.low,cur)}–${fmt(c.high,cur)}</div></div>`;
-    if(c.examples&&c.examples.length) html += `<div class="examples">`+c.examples.map(ex=>`
-      <a class="ex" href="${esc(ex.url)}" target="_blank" rel="noopener">${ex.image?`<img src="${esc(ex.image)}" alt="">`:`<span style="width:42px"></span>`}<span class="t">${esc(ex.title)}</span><span class="p">${esc(ex.price)}</span></a>`).join("")+`</div>`;
+    html += examplesHtml(c.examples);
     html += `</div>`;
     resaleEur = c.anchor * (RATE[cur]||1); basis = `what they're asking`;
   } else {
     const e = id.estimated_resale_eur || {};
     const lo=Number(e.low)||0, hi=Number(e.high)||lo;
     if(lo||hi){ resaleEur=(lo+hi)/2; basis="a rough guess"; }
-    const thin = c && !c.error && c.count>0 && !c.reliable;
     const txt = (lo||hi)
-      ? `Rough guess <b style="color:var(--accent)">€${lo||hi}–€${hi||lo}</b> <span style="color:var(--faint)">— ${thin?`only ${c.count} real listings, too few to trust`:"no real sales found yet"}. Check the links below.</span>`
+      ? `Rough guess <b style="color:var(--accent)">€${lo||hi}–€${hi||lo}</b> <span style="color:var(--faint)">— ${hasComps?`only ${c.count} real listing${c.count===1?"":"s"}, too few to trust`:(c&&c.error?"couldn't check live prices":"no real listings found yet")}. ${hasComps?"See them below, or try":"Try"} the sold-price button or links.</span>`
       : (c&&c.error ? "Couldn't check prices — use the links below." : "Tap “What did it really sell for?” or the links below for real numbers.");
-    html += `<div class="band"><div class="band-h">Rough price</div><div class="notes" style="font-style:normal">${txt}</div></div>`;
+    html += `<div class="band"><div class="band-h">Rough price</div><div class="notes" style="font-style:normal">${txt}</div>`;
+    if(hasComps){ html += `<div class="cbadge-row">${compBadge("low",c.count,false)}</div>`+examplesHtml(c.examples); }
+    html += `</div>`;
   }
 
   // ---- max buy price: the decision aid, shown BEFORE you commit a cost ----
@@ -361,10 +382,12 @@ function renderCard(data, el, n, img){
       if(!d.count){ soldBtn.disabled=false; soldBtn.textContent = "No sales found — try the eBay link"; return; }
       const ccy = d.currency;
       resaleEur = d.median * (RATE[ccy]||1); basis = `what it actually sold for`;
+      const sconf = d.count>=8 ? ((d.high!=null&&d.low!=null&&d.median>0&&(d.high-d.low)<=d.median*1.5)?"high":"medium") : (d.count>=3?"medium":"low");
       const bandEl = el.querySelector(".band");
-      bandEl.innerHTML = `<div class="band-h" style="color:var(--good)">✅ Actually sold for this · ${d.count} recent sales</div>
+      bandEl.innerHTML = `<div class="band-h" style="color:var(--good)">✅ Actually sold for this</div>
+        <div class="cbadge-row">${compBadge(sconf,d.count,sconf==="high")}</div>
         <div class="band-row"><div class="band-med">${fmt(d.median,ccy)}</div><div class="band-lohi">most went for<br>${fmt(d.low,ccy)}–${fmt(d.high,ccy)}</div></div>`
-        + (d.examples&&d.examples.length ? `<div class="examples">`+d.examples.map(ex=>`<a class="ex" href="${esc(ex.url)}" target="_blank" rel="noopener">${ex.image?`<img src="${esc(ex.image)}" alt="">`:`<span style="width:42px"></span>`}<span class="t">${esc(ex.title)}</span><span class="p">${esc(ex.price)}</span></a>`).join("")+`</div>` : "");
+        + examplesHtml(d.examples);
       soldBtn.style.display = "none";
       updateMaxBuy(); updateVerdict();
     } catch(e){ soldBtn.disabled=false; soldBtn.innerHTML = orig; alert(e.message); }
