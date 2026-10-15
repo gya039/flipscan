@@ -97,6 +97,7 @@
   .paid .cur{color:var(--muted);font-weight:700;font-size:1.05rem}
   .paid input{flex:1;background:var(--surface-2);border:1px solid var(--line-strong);color:var(--ink);border-radius:12px;padding:12px 13px;font-size:1.05rem;font-weight:700;font-family:var(--display)}
   .paid input:focus{outline:2px solid var(--accent);outline-offset:1px;border-color:transparent}
+  .tagnote{margin-top:8px;font-size:.74rem;color:var(--accent);background:rgba(203,242,78,.08);border:1px solid rgba(203,242,78,.25);border-radius:8px;padding:7px 10px;line-height:1.4}
   .verdict{margin-top:11px;border-radius:14px;padding:15px 16px;font-family:var(--display);font-size:1.12rem;font-weight:700;display:none;animation:rise .22s ease both}
   .verdict small{display:block;font-family:var(--body);font-weight:400;font-size:.76rem;opacity:.9;margin-top:4px;line-height:1.45}
   .verdict.go{background:linear-gradient(145deg,#173a22,#143019);color:var(--good);box-shadow:0 10px 30px -16px rgba(74,222,128,.6)}
@@ -385,6 +386,15 @@ function renderCard(data, el, n, img){
     }
   }
   updateMaxBuy();
+
+  // Price-tag reading: if the AI read a shop/charity price sticker, prefill "what you paid".
+  if(id.price_tag_eur){
+    input.value = id.price_tag_eur;
+    const note = document.createElement("div"); note.className = "tagnote";
+    note.innerHTML = `📎 Read <b>€${id.price_tag_eur}</b> off the price tag — change it if that's not what you paid`;
+    input.closest(".paid").insertBefore(note, vEl);
+    updateVerdict();
+  }
 
   // On-demand Vinted (IE) asking comps (Apify) — your actual selling market, so it
   // re-bases Max Buy + the verdict on Vinted. Shown as a SEPARATE band from eBay.

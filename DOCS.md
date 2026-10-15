@@ -344,5 +344,10 @@ On a comps failure it is `{ error: "comps_failed" }`; with no eBay keys it is `n
   deeper" now holds only the research tools (shops, reverse image, marketplace links).
   (Decided against Apify eBay-sold comps, deep-dive rec #3: redundant with SoldComps,
   which already gives free eBay sold prices, and the sold-scrape reliability is unproven.)
+- **v1.3** — **Price-tag reading** (deep-dive rec #5). The vision call now returns
+  `price_tag_eur`: if a shop/charity/thrift price sticker is clearly visible in the
+  photo, it reads the number (converting £/$→€) and **auto-fills "what you paid"**, so
+  the buy/skip verdict appears with no typing. Shows a 📎 note; always editable; `null`
+  (no prefill) when no tag is readable — never a guess. One field in the Claude schema.
 
 _Yan's personal reselling tool — separate from the Let's Get Nessie project it sits next to on disk._

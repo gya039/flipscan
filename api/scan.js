@@ -71,6 +71,7 @@ const IDENTITY_TOOL = {
       notes: { type: "string", description: "One short, plain line like a mate would say — what makes it worth money, or what to double-check. Everyday words only; NO marketing speak (avoid 'appeals to buyers', 'nostalgia', 'sought-after', 'coveted')." },
       search_query: { type: "string", description: "SHORT eBay-style search to find MANY comparable sold listings: about 3-5 words — brand + item type + at most ONE key descriptor. Drop colour, era and extra adjectives; a long/specific string matches too few listings. No 'unknown', no filler." },
       authenticity_flags: { type: "string", description: "Short note if anything looks fake/bootleg, else 'none'." },
+      price_tag_eur: { type: ["number", "null"], description: "ONLY if a shop/charity/thrift PRICE STICKER or hand-written price tag is clearly VISIBLE on the item in the photo, the number on it, in EUR (convert from £/$ at a rough rate if needed). This is what it costs to BUY, not a size or product code. If no price tag is clearly readable, use null. Never guess a price here." },
       confidence: { type: "string", enum: ["high", "medium", "low"], description: "Overall confidence in the identification." },
       estimated_resale_eur: {
         type: "object",
@@ -123,6 +124,8 @@ Call the report_item tool with your assessment.`;
   if (!block || !block.input) throw new StageError("identify_failed", "no tool_use block in reply");
   const id = block.input;
   id.estimated_resale_eur = cleanEstimate(id.estimated_resale_eur);
+  const pt = Number(id.price_tag_eur);
+  id.price_tag_eur = (isFinite(pt) && pt > 0 && pt < 100000) ? Math.round(pt * 100) / 100 : null; // sanitise
   id.model_used = MODEL;
   return id;
 }
