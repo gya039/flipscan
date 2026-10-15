@@ -338,5 +338,11 @@ On a comps failure it is `{ error: "comps_failed" }`; with no eBay keys it is `n
   On-demand (not per-scan) because Apify is slow + paid (~€0.03/lookup); results
   **cached 24h in Upstash**. `maxDuration=60` on the function. Graceful: a failure just
   leaves the eBay band as-is. NOTE: scraping Vinted breaches their ToS — personal use only.
+- **v1.2** — **eBay sold promoted.** The two price-refining lookups that re-base the
+  number — **💷 eBay sold** (SoldComps) and **🛒 Vinted IE** (Apify) — moved out of
+  "Dig deeper" into a prominent two-button row directly under the price band. "Dig
+  deeper" now holds only the research tools (shops, reverse image, marketplace links).
+  (Decided against Apify eBay-sold comps, deep-dive rec #3: redundant with SoldComps,
+  which already gives free eBay sold prices, and the sold-scrape reliability is unproven.)
 
 _Yan's personal reselling tool — separate from the Let's Get Nessie project it sits next to on disk._

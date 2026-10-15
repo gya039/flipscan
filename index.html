@@ -109,6 +109,9 @@
   .logbtn{width:100%;margin-top:10px;background:var(--surface-2);border:1px solid var(--line-strong);color:var(--ink);border-radius:12px;padding:12px;font-weight:700;font-size:.9rem;cursor:pointer;transition:border-color .15s}
   .logbtn:hover{border-color:var(--muted)}
   .logbtn:disabled{opacity:.6}
+  .price-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px}
+  .price-actions > button{margin-top:0}
+  .price-actions .soldbtn small,.price-actions .vintedbtn small{display:block;margin-left:0;margin-top:2px;font-size:.64rem}
   .vintedband{margin-top:14px}
   .vintedband:empty{margin-top:0}
   .band.vinted{margin-top:0;border-top:0;background:rgba(47,212,198,.06);border:1px solid rgba(47,212,198,.35);border-radius:14px;padding:14px 15px}
@@ -315,6 +318,11 @@ function renderCard(data, el, n, img){
   // ---- Vinted (IE) band: filled on demand, shown SEPARATELY from the eBay band ----
   html += `<div class="vintedband"></div>`;
 
+  // ---- truer-price actions: the two lookups that RE-BASE the number, kept prominent ----
+  html += `<div class="price-actions">
+    <button class="soldbtn" type="button">💷 eBay sold<small>1 of 100/mo</small></button>
+    <button class="vintedbtn" type="button">🛒 Vinted IE<small>your market · ~€0.03</small></button></div>`;
+
   // ---- max buy price: the decision aid, shown BEFORE you commit a cost ----
   html += `<div class="maxbuy" style="display:none"></div>`;
 
@@ -325,9 +333,7 @@ function renderCard(data, el, n, img){
   html += `<button class="logbtn" type="button">💾 Log purchase</button>`;
 
   // ---- dig deeper: optional research, folded away so it doesn't crowd the decision ----
-  html += `<details class="dig"><summary>Dig deeper — Vinted prices, real sold price, shops &amp; web</summary>
-    <button class="vintedbtn" type="button">🛒 Check Vinted prices (IE) <small>your market · ~€0.03</small></button>
-    <button class="soldbtn" type="button">💷 What did it really sell for? <small>1 of 100 this month</small></button>
+  html += `<details class="dig"><summary>Dig deeper — shops &amp; reverse image search</summary>
     <button class="lensbtn" type="button">🛍️ Find it in shops — with prices</button><div class="lensresults"></div>
     <button class="webbtn" type="button">🌐 Reverse image search the web</button><div class="webresults"></div>
     <div class="links">
@@ -414,7 +420,7 @@ function renderCard(data, el, n, img){
       if(r.status===401){ localStorage.removeItem("flipscan_secret"); throw new Error("Access code rejected — scan again to re-enter."); }
       const d = await r.json();
       if(!r.ok || d.error) throw new Error(prettyErr(d.error) || "sold lookup failed");
-      if(!d.count){ soldBtn.disabled=false; soldBtn.textContent = "No sales found — try the eBay link"; return; }
+      if(!d.count){ soldBtn.disabled=false; soldBtn.textContent = "No recent sales found"; return; }
       const ccy = d.currency;
       resaleEur = d.median * (RATE[ccy]||1); basis = `what it actually sold for`;
       const sconf = d.count>=8 ? ((d.high!=null&&d.low!=null&&d.median>0&&(d.high-d.low)<=d.median*1.5)?"high":"medium") : (d.count>=3?"medium":"low");
