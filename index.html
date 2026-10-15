@@ -292,7 +292,7 @@ function renderCard(data, el, n, img){
   // ---- decide what the verdict rests on ----
   // 3+ comps drive the price (with a confidence badge). 1-2 comps are shown as
   // evidence but flagged a guess, and the AI estimate carries the number. 0 comps = estimate only.
-  let resaleEur=null, basis="", cur="EUR";
+  let resaleEur=null, basis="", cur="EUR", priceSource="AI", bandLow=null, bandHigh=null;
   const hasComps = c && !c.error && c.count>0 && c.anchor!=null;
   const useComps = hasComps && c.count>=3;
   if(useComps){
@@ -304,10 +304,11 @@ function renderCard(data, el, n, img){
     html += examplesHtml(c.examples);
     html += `</div>`;
     resaleEur = c.anchor * (RATE[cur]||1); basis = `what they're asking`;
+    priceSource = "eBay asking"; bandLow = c.low*(RATE[cur]||1); bandHigh = c.high*(RATE[cur]||1);
   } else {
     const e = id.estimated_resale_eur || {};
     const lo=Number(e.low)||0, hi=Number(e.high)||lo;
-    if(lo||hi){ resaleEur=(lo+hi)/2; basis="a rough guess"; }
+    if(lo||hi){ resaleEur=(lo+hi)/2; basis="a rough guess"; priceSource="AI"; bandLow=lo; bandHigh=hi; }
     const txt = (lo||hi)
       ? `Rough guess <b style="color:var(--accent)">€${lo||hi}–€${hi||lo}</b> <span style="color:var(--faint)">— ${hasComps?`only ${c.count} real listing${c.count===1?"":"s"}, too few to trust`:(c&&c.error?"couldn't check live prices":"no real listings found yet")}. ${hasComps?"See them below, or try":"Try"} the sold-price button or links.</span>`
       : (c&&c.error ? "Couldn't check prices — use the links below." : "Tap “What did it really sell for?” or the links below for real numbers.");
@@ -415,6 +416,7 @@ function renderCard(data, el, n, img){
         <div class="band-lohi">a fair ask to work off<br>most sit ${fmt(d.low,'EUR')}–${fmt(d.high,'EUR')}</div></div>`
         + examplesHtml(d.examples) + `</div>`;
       resaleEur = d.anchor; basis = `what Vinted ${cc} sellers ask`;  // Vinted is EUR, no conversion
+      priceSource = "Vinted"; bandLow = d.low; bandHigh = d.high;
       vintedBtn.style.display="none";
       updateMaxBuy(); updateVerdict();
     } catch(e){ vintedBtn.disabled=false; vintedBtn.innerHTML=o; alert(e.message); }
@@ -433,6 +435,7 @@ function renderCard(data, el, n, img){
       if(!d.count){ soldBtn.disabled=false; soldBtn.textContent = "No recent sales found"; return; }
       const ccy = d.currency;
       resaleEur = d.median * (RATE[ccy]||1); basis = `what it actually sold for`;
+      priceSource = "eBay sold"; bandLow = d.low*(RATE[ccy]||1); bandHigh = d.high*(RATE[ccy]||1);
       const sconf = d.count>=8 ? ((d.high!=null&&d.low!=null&&d.median>0&&(d.high-d.low)<=d.median*1.5)?"high":"medium") : (d.count>=3?"medium":"low");
       const bandEl = el.querySelector(".band");
       bandEl.innerHTML = `<div class="band-h" style="color:var(--good)">✅ Actually sold for this</div>
@@ -487,7 +490,9 @@ function renderCard(data, el, n, img){
     logBtn.disabled = true; logBtn.textContent = "Saving…";
     try {
       const record = { brand:id.brand, item_type:id.item_type, era:id.era, confidence:id.confidence,
-        basis, est_eur: resaleEur!=null?Math.round(resaleEur):null, paid: isFinite(paid)?paid:null, bought:true };
+        basis, price_source: priceSource, est_eur: resaleEur!=null?Math.round(resaleEur):null,
+        band_low: bandLow!=null?Math.round(bandLow):null, band_high: bandHigh!=null?Math.round(bandHigh):null,
+        paid: isFinite(paid)?paid:null, logged_at: new Date().toISOString().slice(0,10), bought:true };
       const r = await fetch("/api/log",{ method:"POST", headers:{ "content-type":"application/json", "x-flipscan-secret":getSecret() }, body: JSON.stringify({ action:"save", record }) });
       if(r.status===401){ localStorage.removeItem("flipscan_secret"); throw new Error("Access code rejected — scan again to re-enter."); }
       const d = await r.json(); if(!r.ok || d.error) throw new Error(prettyErr(d.error) || "save failed");

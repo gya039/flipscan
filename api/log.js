@@ -40,6 +40,7 @@ export default async function handler(req, res) {
       const rec = { ...(body.record || {}) };
       rec.id = rec.id || newId();
       rec.ts = rec.ts || new Date().toISOString();
+      rec.logged_at = rec.logged_at || rec.ts.slice(0, 10);
       await redis(["HSET", KEY, rec.id, JSON.stringify(rec)]);
       return res.status(200).json({ ok: true, id: rec.id });
     }

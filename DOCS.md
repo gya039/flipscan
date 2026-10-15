@@ -349,5 +349,14 @@ On a comps failure it is `{ error: "comps_failed" }`; with no eBay keys it is `n
   photo, it reads the number (converting £/$→€) and **auto-fills "what you paid"**, so
   the buy/skip verdict appears with no typing. Shows a 📎 note; always editable; `null`
   (no prefill) when no tag is readable — never a guess. One field in the Claude schema.
+- **v1.4** — **Outcome tracking** (deep-dive rec #4). The log now records, on save,
+  `price_source` (AI / eBay asking / eBay sold / Vinted — whichever the verdict used),
+  the predicted `band_low`/`band_high`, and `logged_at`. `log.html` gains per-item
+  **Postage €** (defaults from cost settings), **Listed on** and **Sold on** date
+  pickers (both default sensibly on first sold-price entry), and **profit = sold − paid
+  − postage** (Vinted fee 0). New stats: **average days to sell**, **% of sold items that
+  landed inside our predicted range**, and the **"% off" split by price source** ("not
+  enough data" under 5 sold items per source). **⬇ Export CSV** button. Old records
+  without the new fields still display and compute fine.
 
 _Yan's personal reselling tool — separate from the Let's Get Nessie project it sits next to on disk._

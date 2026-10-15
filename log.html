@@ -42,6 +42,14 @@
   .del:hover{color:var(--bad)}
   .empty,.err{color:var(--muted);margin-top:20px;font-size:.9rem;line-height:1.5}
   .err{color:var(--bad)}
+  .bar{display:flex;justify-content:flex-end;margin-top:16px}
+  .bar + .totals{margin-top:10px}
+  .csv{background:var(--surface-2);border:1px solid var(--line-strong);color:var(--ink);border-radius:10px;padding:8px 13px;font-weight:700;font-size:.8rem;cursor:pointer;font-family:var(--body)}
+  .csv:hover{border-color:var(--accent)}
+  .acc .muted{color:var(--faint)}
+  .acc .srhead{margin-top:9px;color:var(--faint);text-transform:uppercase;font-size:.64rem;letter-spacing:.05em}
+  .acc .sr{margin-top:4px}
+  .f input[type=date]::-webkit-calendar-picker-indicator{filter:invert(.75)}
 </style>
 </head>
 <body>
@@ -56,6 +64,16 @@ function getSecret(){ return localStorage.getItem("flipscan_secret")||""; }
 function askSecret(){ const s=prompt("Enter the FlipScan access code"); if(s) localStorage.setItem("flipscan_secret",s.trim()); return getSecret(); }
 function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
 function eur(v){ return v==null||isNaN(v)?"—":"€"+Math.round(v); }
+function today(){ return new Date().toISOString().slice(0,10); }
+function costs(){ try{ return JSON.parse(localStorage.getItem("flipscan_costs")||"{}"); }catch{ return {}; } }
+function defPost(){ const p=parseFloat(costs().post); return isFinite(p)?p:0; }
+// Postage: per-item value if set, else the default from cost settings.
+function postageOf(r){ const v=(r.postage===undefined||r.postage===null||r.postage==="")?defPost():+r.postage; return isFinite(v)?v:0; }
+// Profit = sold − paid − postage. Vinted seller fee is 0, so no fee term.
+function profitOf(r){ if(r.sold_eur==null||isNaN(r.sold_eur)) return null; return (+r.sold_eur)-((+r.paid)||0)-postageOf(r); }
+function daysBetween(a,b){ if(!a||!b) return null; const d=(new Date(b)-new Date(a))/86400000; return isFinite(d)?Math.round(d):null; }
+
+let RECORDS=[];
 
 async function api(action, extra){
   const r = await fetch("/api/log",{method:"POST",headers:{"content-type":"application/json","x-flipscan-secret":getSecret()},body:JSON.stringify({action,...extra})});
@@ -68,34 +86,81 @@ let debounce;
 function saveField(id, patch){ clearTimeout(debounce); debounce=setTimeout(()=>api("update",{id,patch}).then(load).catch(()=>{}),600); }
 async function del(id){ if(!confirm("Delete this record?")) return; await api("delete",{id}); load(); }
 
+function exportCsv(){
+  const cols=["id","logged_at","ts","brand","item_type","era","confidence","price_source","basis","est_eur","band_low","band_high","paid","postage","platform","listed_on","sold_on","sold_eur","profit"];
+  const cell=(v)=>{ v=v==null?"":String(v); return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; };
+  const lines=[cols.join(",")];
+  RECORDS.forEach(r=>{ lines.push(cols.map(c=>{
+    if(c==="postage") return cell(postageOf(r));
+    if(c==="profit"){ const p=profitOf(r); return cell(p==null?"":p); }
+    if(c==="ts") return cell((r.ts||"").slice(0,19));
+    return cell(r[c]);
+  }).join(",")); });
+  const blob=new Blob([lines.join("\n")],{type:"text/csv"});
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="flipscan-log-"+today()+".csv"; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+}
+
 function render(records){
-  // totals
-  let spent=0, sold=0, realised=0, soldCount=0, errSum=0, errN=0;
-  records.forEach(r=>{
-    spent += (+r.paid)||0;
-    if(r.sold_eur!=null && !isNaN(r.sold_eur)){ sold += +r.sold_eur; realised += (+r.sold_eur) - ((+r.paid)||0); soldCount++;
-      if(r.est_eur){ errSum += Math.abs((+r.est_eur) - (+r.sold_eur))/(+r.sold_eur); errN++; } }
-  });
-  $("totals").innerHTML = `<div class="totals">
-    <div class="t"><div class="n">${records.length}</div><div class="l">logged</div></div>
-    <div class="t"><div class="n">${eur(spent)}</div><div class="l">spent</div></div>
-    <div class="t"><div class="n">${eur(sold)}</div><div class="l">sold (${soldCount})</div></div>
-    <div class="t"><div class="n ${realised>=0?'good':''}">${eur(realised)}</div><div class="l">net profit</div></div></div>`
-    + (errN ? `<div class="acc">🎯 How close were we? On ${errN} sold item(s), our price was about <b>${Math.round(errSum/errN*100)}% off</b> what they actually went for.</div>` : "");
+  RECORDS=records;
+  const byId={}; records.forEach(r=>byId[r.id]=r);
+
+  // ---- totals ----
+  let spent=0, sold=0, realised=0, soldCount=0;
+  records.forEach(r=>{ spent+=(+r.paid)||0; const pr=profitOf(r); if(pr!=null){ sold+=+r.sold_eur; realised+=pr; soldCount++; } });
+
+  // ---- stats ----
+  const soldRecs = records.filter(r=>r.sold_eur!=null && !isNaN(r.sold_eur));
+  const dd = soldRecs.map(r=>daysBetween(r.listed_on,r.sold_on)).filter(d=>d!=null && d>=0);
+  const avgDays = dd.length ? Math.round(dd.reduce((a,b)=>a+b,0)/dd.length) : null;
+  const banded = soldRecs.filter(r=>r.band_low!=null && r.band_high!=null);
+  const inBand = banded.filter(r=>{ const lo=Math.min(+r.band_low,+r.band_high), hi=Math.max(+r.band_low,+r.band_high); return +r.sold_eur>=lo && +r.sold_eur<=hi; });
+  const bandPct = banded.length ? Math.round(inBand.length/banded.length*100) : null;
+  const bySource={};
+  soldRecs.forEach(r=>{ if(r.est_eur){ const s=r.price_source||"unknown"; (bySource[s]=bySource[s]||[]).push(Math.abs((+r.est_eur)-(+r.sold_eur))/(+r.sold_eur)); } });
+
+  let statsHtml="";
+  if(soldRecs.length){
+    const order=["eBay sold","Vinted","eBay asking","AI"];
+    const keys=Object.keys(bySource).sort((a,b)=>{ let ia=order.indexOf(a),ib=order.indexOf(b); if(ia<0)ia=99; if(ib<0)ib=99; return ia-ib; });
+    let srcRows="";
+    keys.forEach(s=>{ const arr=bySource[s];
+      srcRows += arr.length<5
+        ? `<div class="sr">${esc(s)} <span class="muted">— not enough data (${arr.length}/5)</span></div>`
+        : `<div class="sr">${esc(s)}: <b>${Math.round(arr.reduce((a,b)=>a+b,0)/arr.length*100)}% off</b> <span class="muted">(${arr.length} sold)</span></div>`;
+    });
+    statsHtml = `<div class="acc">
+      <div>⏱️ Average days to sell: <b>${avgDays!=null?avgDays+" day"+(avgDays===1?"":"s"):"—"}</b>${dd.length?` <span class="muted">(${dd.length} with dates)</span>`:` <span class="muted">(fill in Listed/Sold dates)</span>`}</div>
+      <div style="margin-top:7px">🎯 Landed inside our predicted range: <b>${bandPct!=null?bandPct+"%":"—"}</b>${banded.length?` <span class="muted">(${inBand.length}/${banded.length})</span>`:""}</div>
+      <div class="srhead">How far our price was off, by source</div>${srcRows}
+    </div>`;
+  }
+
+  $("totals").innerHTML = `<div class="bar"><button class="csv" id="csv">⬇ Export CSV</button></div>
+    <div class="totals">
+      <div class="t"><div class="n">${records.length}</div><div class="l">logged</div></div>
+      <div class="t"><div class="n">${eur(spent)}</div><div class="l">spent</div></div>
+      <div class="t"><div class="n">${eur(sold)}</div><div class="l">sold (${soldCount})</div></div>
+      <div class="t"><div class="n ${realised>=0?'good':''}">${eur(realised)}</div><div class="l">net profit</div></div>
+    </div>${statsHtml}`;
+  $("csv").addEventListener("click", exportCsv);
 
   if(!records.length){ $("list").innerHTML = `<div class="empty">Nothing logged yet. After a scan, hit 💾 to save what you bought — then add the sell price here when it goes.</div>`; return; }
 
+  const dpost = defPost();
   $("list").innerHTML = records.map(r=>{
-    const held = r.sold_eur==null || isNaN(r.sold_eur);
-    const profit = held ? null : (+r.sold_eur) - ((+r.paid)||0);
+    const profit = profitOf(r); const held = profit==null;
+    const logged = (r.logged_at || (r.ts||"").slice(0,10) || "");
     return `<div class="rec">
       <div class="top"><div><div class="name">${esc(r.brand||"Unknown")} · ${esc(r.item_type||"")}</div>
-        <div class="sub">${esc((r.ts||"").slice(0,10))} ${r.era&&r.era!=="unknown"?"· "+esc(r.era):""}</div></div>
-        <div class="est">est ${eur(r.est_eur)}<br><span style="color:var(--faint)">${esc(r.basis||"")}</span></div></div>
+        <div class="sub">${esc(logged)} ${r.era&&r.era!=="unknown"?"· "+esc(r.era):""}</div></div>
+        <div class="est">est ${eur(r.est_eur)}<br><span style="color:var(--faint)">${esc(r.price_source||r.basis||"")}</span></div></div>
       <div class="grid">
         <div class="f"><label>Paid €</label><input type="number" inputmode="decimal" value="${r.paid!=null?r.paid:""}" data-id="${r.id}" data-k="paid"></div>
         <div class="f"><label>Sold for €</label><input type="number" inputmode="decimal" value="${r.sold_eur!=null?r.sold_eur:""}" data-id="${r.id}" data-k="sold_eur" placeholder="when it sells"></div>
-        <div class="f" style="grid-column:1/-1"><label>Platform</label><input type="text" value="${esc(r.platform||"")}" data-id="${r.id}" data-k="platform" placeholder="Vinted / Depop / eBay / stall"></div>
+        <div class="f"><label>Postage €</label><input type="number" inputmode="decimal" value="${r.postage!=null&&r.postage!==""?r.postage:""}" data-id="${r.id}" data-k="postage" placeholder="${dpost}"></div>
+        <div class="f"><label>Platform</label><input type="text" value="${esc(r.platform||"")}" data-id="${r.id}" data-k="platform" placeholder="Vinted / Depop / eBay"></div>
+        <div class="f"><label>Listed on</label><input type="date" value="${esc(r.listed_on||"")}" data-id="${r.id}" data-k="listed_on"></div>
+        <div class="f"><label>Sold on</label><input type="date" value="${esc(r.sold_on||"")}" data-id="${r.id}" data-k="sold_on"></div>
       </div>
       <div class="foot">
         <div class="profit ${held?'held':(profit>=0?'pos':'neg')}">${held?"still held":(profit>=0?"+":"")+eur(profit)+" profit"}</div>
@@ -107,8 +172,14 @@ function render(records){
     inp.addEventListener("input", ()=>{
       const k=inp.dataset.k, id=inp.dataset.id;
       let v = inp.value;
-      if(k==="paid"||k==="sold_eur") v = v===""?null:parseFloat(v);
-      saveField(id,{[k]:v});
+      if(k==="paid"||k==="sold_eur"||k==="postage") v = v===""?null:parseFloat(v);
+      const patch={[k]:v};
+      if(k==="sold_eur" && v!=null && !isNaN(v)){        // first sold price stamps the dates
+        const rec=byId[id]||{};
+        if(!rec.sold_on) patch.sold_on = today();
+        if(!rec.listed_on) patch.listed_on = rec.logged_at || (rec.ts||"").slice(0,10) || today();
+      }
+      saveField(id,patch);
     });
   });
   $("list").querySelectorAll("button[data-del]").forEach(b=> b.addEventListener("click",()=>del(b.dataset.del)));
