@@ -70,15 +70,25 @@ export default async function handler(req, res) {
     if (!process.env.EBAY_CLIENT_ID || !process.env.EBAY_CLIENT_SECRET) return res.status(500).json({ error: "comps_not_configured" });
 
     const body = await readJson(req);
-    const query = String(body.query || "").replace(/\s+/g, " ").trim().slice(0, 80);
-    if (!query) return res.status(400).json({ error: "no_query" });
+    const levels = Array.isArray(body.queries) && body.queries.length
+      ? body.queries.map((x) => ({ level: x.level || "full", q: String(x.q || "").replace(/\s+/g, " ").trim().slice(0, 80) })).filter((x) => x.q)
+      : (String(body.query || "").trim() ? [{ level: "full", q: String(body.query).replace(/\s+/g, " ").trim().slice(0, 80) }] : []);
+    if (!levels.length) return res.status(400).json({ error: "no_query" });
     const branded = !!body.branded;
     const market = process.env.EBAY_MARKETPLACE || "EBAY_GB";
     const ccy = MARKET_CCY[market] || "GBP";
 
     let token; try { token = await ebayAuth(); } catch (e) { console.error("comps auth", e.message); return res.status(502).json({ error: "comps_failed" }); }
-    let items; try { items = await ebaySearch(query, token, market, ccy); } catch (e) { console.error("comps search", e.message); return res.status(502).json({ error: "comps_failed" }); }
-    return res.status(200).json(summarise(items, ccy, market, query, branded));
+    // broaden on thin: full -> no-material -> no-colour (Decision #2)
+    let best = null, bestLevel = null, bestQ = "";
+    for (const { level, q } of levels) {
+      let items; try { items = await ebaySearch(q, token, market, ccy); } catch (e) { console.error("comps kw", level, e.message); continue; }
+      if (!best || items.length > best.length) { best = items; bestLevel = level; bestQ = q; }
+      if (items.length >= MIN_COMPS) { best = items; bestLevel = level; bestQ = q; break; }
+    }
+    if (!best) return res.status(502).json({ error: "comps_failed" });
+    const s = summarise(best, ccy, market, bestQ, branded); s.queryLevel = bestLevel;
+    return res.status(200).json(s);
   } catch (e) {
     console.error("comps handler", e);
     return res.status(500).json({ error: "server_error" });

@@ -93,15 +93,21 @@ export default async function handler(req, res) {
     try { const cached = await redis(["GET", cacheKey]); if (cached) return res.status(200).json(JSON.parse(cached)); }
     catch (e) { console.error("vinted cache read", e.message); }
 
-    // Scrape IE first; fall back to FR if IE is thin.
-    let country = "ie", rows = [];
-    try { rows = await scrapeCountry(query, "ie"); }
-    catch (e) { console.error("vinted ie", e.message); }
+    // Decision #2: query levels to broaden on thin — full -> no-material -> no-colour.
+    const levels = Array.isArray(body.queries) && body.queries.length
+      ? body.queries.map((x) => ({ level: x.level || "full", q: String(x.q || "").split(/\s+/).slice(0, 5).join(" ").trim() })).filter((x) => x.q)
+      : [{ level: "full", q: query }];
+
+    // Try each level on IE (keep the best); fall back to FR with the full query only if still thin.
+    let country = "ie", rows = [], usedLevel = levels[0].level;
+    for (const { level, q } of levels) {
+      try { const r = await scrapeCountry(q, "ie"); if (r.length > rows.length) { rows = r; usedLevel = level; } }
+      catch (e) { console.error("vinted ie", level, e.message); }
+      if (rows.length >= WANT) break;
+    }
     if (rows.length < WANT) {
-      try {
-        const fr = await scrapeCountry(query, "fr");
-        if (fr.length > rows.length) { rows = fr; country = "fr"; }
-      } catch (e) { console.error("vinted fr", e.message); }
+      try { const fr = await scrapeCountry(levels[0].q, "fr"); if (fr.length > rows.length) { rows = fr; country = "fr"; usedLevel = levels[0].level; } }
+      catch (e) { console.error("vinted fr", e.message); }
     }
 
     if (!rows.length) {
@@ -122,7 +128,7 @@ export default async function handler(req, res) {
       .map((it) => ({ title: it.title || it.brand_title || "Vinted listing", price: `€${Math.round(parseFloat(it.price.amount))}`, url: it.url, image: imgOf(it), condition: it.status || "" }));
 
     const result = {
-      source: "Vinted", country, branded, count: prices.length, rawCount, dropped: rawCount - prices.length, currency: "EUR",
+      source: "Vinted", country, branded, queryLevel: usedLevel, count: prices.length, rawCount, dropped: rawCount - prices.length, currency: "EUR",
       reliable: prices.length >= WANT, confidence, tight,
       low, anchor, median, high, examples,
     };

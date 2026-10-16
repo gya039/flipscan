@@ -95,6 +95,18 @@ function buildQuery(id) {
   ].map((x) => String(x || "").trim()).filter(Boolean);
   return parts.join(" ").replace(/\s+/g, " ").slice(0, 80);
 }
+// Decision #2: ordered query levels to broaden a thin search — full → drop material → drop colour.
+function buildQueryLevels(id) {
+  const brand = (id.brand && String(id.brand).toLowerCase() !== "unknown") ? id.brand : "";
+  const join = (arr) => arr.map((x) => String(x || "").trim()).filter(Boolean).join(" ").replace(/\s+/g, " ").slice(0, 80);
+  const full = join([brand, id.colour, id.material, id.item_type]);
+  const noMat = join([brand, id.colour, id.item_type]);
+  const noCol = join([brand, id.item_type]);
+  const out = [{ level: "full", q: full }];
+  if (noMat && noMat !== full) out.push({ level: "no-material", q: noMat });
+  if (noCol && noCol !== noMat && noCol !== full) out.push({ level: "no-colour", q: noCol });
+  return out;
+}
 
 function cleanEstimate(e) {
   if (!e) return null;
@@ -247,31 +259,35 @@ function summarise(items, ccy, market, used, matched, branded) {
     confidence, tight, low, anchor, median, high, examples,
   };
 }
-async function getComps(cleanedQuery, fallbackQuery, imageB64, branded) {
+async function getComps(levels, imageB64, branded) {
   if (!process.env.EBAY_CLIENT_ID || !process.env.EBAY_CLIENT_SECRET) return null;
   const market = process.env.EBAY_MARKETPLACE || "EBAY_GB";
   const ccy = MARKET_CCY[market] || "GBP";
   const token = await ebayAuth();
+  const imageResult = () => { const s = summarise(imageItems, ccy, market, "(image match)", "image", branded); s.queryLevel = "image"; return s; };
 
-  // 1) Try TRUE image search first — matches on how the item actually LOOKS, not words.
+  // 1) Image search first — matches on how it actually LOOKS, not words.
   let imageItems = [];
   if (imageB64) {
     try { imageItems = await ebaySearchByImage(imageB64, token, market, ccy); }
     catch (e) { console.error("ebay image search:", e.message); }
   }
-  if (imageItems.length >= IMG_MIN) return summarise(imageItems, ccy, market, "(image match)", "image", branded);
+  if (imageItems.length >= IMG_MIN) return imageResult();
 
-  // 2) Fall back to keyword search (with a broader retry) when image search is unavailable or too thin.
-  if (!cleanedQuery) return imageItems.length ? summarise(imageItems, ccy, market, "(image match)", "image", branded) : null;
-  let used = cleanedQuery;
-  let items = await ebaySearch(cleanedQuery, token, market, ccy);
-  if (items.length < MIN_COMPS && fallbackQuery && cleanQuery(fallbackQuery) && cleanQuery(fallbackQuery) !== cleanedQuery) {
-    const broader = await ebaySearch(cleanQuery(fallbackQuery), token, market, ccy);
-    if (broader.length > items.length) { items = broader; used = cleanQuery(fallbackQuery); }
+  // 2) Keyword, broadening on thin: full -> drop material -> drop colour. First with >=MIN wins; else the best.
+  let best = null, bestLevel = null, bestQ = "";
+  for (const { level, q } of (levels || [])) {
+    if (!q) continue;
+    let items; try { items = await ebaySearch(q, token, market, ccy); } catch (e) { console.error("ebay kw", level, e.message); continue; }
+    if (!best || items.length > best.length) { best = items; bestLevel = level; bestQ = q; }
+    if (items.length >= MIN_COMPS) { best = items; bestLevel = level; bestQ = q; break; }
   }
-  // If keyword also came back thin but image had a few, prefer the visual matches.
-  if (imageItems.length > items.length) return summarise(imageItems, ccy, market, "(image match)", "image", branded);
-  return summarise(items, ccy, market, used, "keyword", branded);
+  if ((!best || best.length === 0) && imageItems.length) return imageResult();
+  if (!best) return null;
+  if (imageItems.length > best.length) return imageResult();
+  const s = summarise(best, ccy, market, bestQ, "keyword", branded);
+  s.queryLevel = bestLevel;
+  return s;
 }
 
 // NOTE: Google Vision reverse image search lives in api/web.js now — it's an
@@ -319,9 +335,8 @@ export default async function handler(req, res) {
     // --- comps (optional; never fails the scan). eBay image → keyword fallback. ---
     let comps = null;
     try {
-      const cq = cleanQuery(identity.search_query);
       const branded = !!(identity.brand && identity.brand.toLowerCase() !== "unknown");
-      comps = await getComps(cq, `${identity.brand} ${identity.item_type}`, parsed[0] && parsed[0].b64, branded);
+      comps = await getComps(buildQueryLevels(identity), parsed[0] && parsed[0].b64, branded);
     } catch (e) {
       console.error("comps error:", e.message);
       comps = { error: "comps_failed" };

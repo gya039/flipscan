@@ -382,14 +382,18 @@ def main():
         row["checks"] += validate_scan(scan)
         idn = (scan["json"].get("identity") or {}) if scan["status"] == 200 else {}
         row["brand"], row["item_type"], row["confidence"] = idn.get("brand", ""), idn.get("item_type", ""), idn.get("confidence", "")
+        row["model_used"] = idn.get("model_used", "")
         comps = scan["json"].get("comps") if scan["status"] == 200 else None
         q = query_of(idn)
+        print("  ID brand='%s' item='%s' conf=%s model=%s" % (idn.get("brand"), idn.get("item_type"), idn.get("confidence"), idn.get("model_used")))
 
         # fix #4: same photo scanned twice should produce the SAME (deterministic) search_query
         if not args.no_twice:
             scan2 = post("/api/scan", {"images": [img]}); endpoint_lat["scan"].append(scan2["latency"])
             q2 = query_of((scan2["json"].get("identity") or {}) if scan2["status"] == 200 else {})
+            row["q1"], row["q2"] = q, q2
             row["checks"].append(("stable_search_query", bool(q) and q == q2, "run1 '%s' vs run2 '%s'" % (q, q2)))
+            print("  QUERY run1='%s' run2='%s' stable=%s" % (q, q2, q == q2))
             time.sleep(1)
 
         asking_med = None
@@ -417,8 +421,8 @@ def main():
             if med: row["vinted_med"] = round(med, 1)
             row["_vinted_raw"] = r["json"]
             vj = r["json"]
-            print("  VINTED q='%s' count=%s low=%s anchor=%s median=%s high=%s country=%s examples=%s" % (
-                q, vj.get("count"), vj.get("low"), vj.get("anchor"), vj.get("median"), vj.get("high"),
+            print("  VINTED q='%s' level=%s count=%s low=%s anchor=%s median=%s high=%s country=%s examples=%s" % (
+                q, vj.get("queryLevel"), vj.get("count"), vj.get("low"), vj.get("anchor"), vj.get("median"), vj.get("high"),
                 vj.get("country"), [e.get("price") for e in (vj.get("examples") or [])]))
         if i < LENS_WEB_LIMIT:
             r = post("/api/lens", {"image": img}); endpoint_lat["lens"].append(r["latency"]); row["checks"] += validate_lensweb(r, "lens")
@@ -430,6 +434,11 @@ def main():
         driver, _dis = compute_driver(comps if comps and not comps.get("error") else None, row.get("_sold_raw"), row.get("_vinted_raw"), est_mid)
         row["driver_src"] = driver["key"]
         resale = driver["mid"]
+        print("  SOURCES asking=%s/%s[%s] sold=%s/%s vinted=%s/%s(%s)[%s]  DRIVER=%s EUR%s disagree=%s" % (
+            row["asking_med"], (comps or {}).get("count"), (comps or {}).get("queryLevel"),
+            row["sold_med"], (row.get("_sold_raw") or {}).get("count"),
+            row["vinted_med"], (row.get("_vinted_raw") or {}).get("count"), (row.get("_vinted_raw") or {}).get("country"), (row.get("_vinted_raw") or {}).get("queryLevel"),
+            driver["key"], round(resale) if resale else "-", _dis))
         if resale:
             mb, af = max_buy(resale)
             row["max_buy"] = mb
@@ -454,11 +463,18 @@ def main():
             row["checks"].append(("has_a_price", False, "no comps and no estimate"))
 
         # --- real sanity checks (behaviour, not just shape) ---
-        meds = {k: v for k, v in (("asking", row["asking_med_num"]), ("sold", row["sold_med_num"]), ("vinted", row["vinted_med_num"])) if v}
-        if len(meds) >= 2:
-            mx, mn = max(meds.values()), min(meds.values())
+        # Decision #3: compare only sources that MEET their minimum count (and Vinted must be IE).
+        tmeds = {}
+        if comps and (comps.get("count") or 0) >= 8 and row["asking_med_num"]:
+            tmeds["asking"] = row["asking_med_num"]
+        if row.get("_sold_raw") and (row["_sold_raw"].get("count") or 0) >= 5 and row["sold_med_num"]:
+            tmeds["sold"] = row["sold_med_num"]
+        if row.get("_vinted_raw") and (row["_vinted_raw"].get("count") or 0) >= 8 and row["_vinted_raw"].get("country") == "ie" and row["vinted_med_num"]:
+            tmeds["vinted"] = row["vinted_med_num"]
+        if len(tmeds) >= 2:
+            mx, mn = max(tmeds.values()), min(tmeds.values())
             row["checks"].append(("sources_within_2.5x", mx <= mn * 2.5,
-                                  "spread %.1fx %s" % (mx / mn, {k: round(v, 1) for k, v in meds.items()})))
+                                  "spread %.1fx %s" % (mx / mn, {k: round(v, 1) for k, v in tmeds.items()})))
         vc = (row.get("_vinted_raw") or {}).get("count") or 0
         if 0 < vc < 8:
             row["checks"].append(("vinted_not_thin", False, "Vinted count %d (<8) — too thin to trust if it drives Max Buy" % vc))
