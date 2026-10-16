@@ -707,7 +707,7 @@ function renderCard(data, el, n, img){
     const paid = parseFloat(input.value);
     logBtn.disabled = true; logBtn.textContent = "Saving…";
     try {
-      const record = { brand:id.brand, item_type:id.item_type, era:id.era, confidence:id.confidence,
+      const record = { brand:id.brand, item_type:id.item_type, era:id.era, confidence:id.confidence, model_used:id.model_used,
         basis, price_source: priceSource, est_eur: resaleEur!=null?Math.round(resaleEur):null,
         band_low: bandLow!=null?Math.round(bandLow):null, band_high: bandHigh!=null?Math.round(bandHigh):null,
         paid: isFinite(paid)?paid:null, logged_at: new Date().toISOString().slice(0,10), bought:true };

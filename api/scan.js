@@ -4,9 +4,9 @@
 // A comps failure never fails the whole scan. Secrets stay server-side.
 
 const MODEL = "claude-haiku-4-5-20251001";
-// const ESCALATION_MODEL = "claude-sonnet-5"; // deferred: see DOCS §13/§15. Low confidence is
-// usually a bad photo (no label) — a stronger model won't fix that, so we nudge for a label shot
-// instead. Enable + wire up once the accuracy test set proves it earns the cost.
+// fix #5: re-run a LOW-confidence identification once on a stronger model. Override the id via
+// the ESCALATION_MODEL env var to match your account; set it to "" to disable escalation.
+const ESCALATION_MODEL = process.env.ESCALATION_MODEL !== undefined ? process.env.ESCALATION_MODEL : "claude-sonnet-4-5";
 
 const MAX_IMAGES = 5;
 const MAX_IMG_CHARS = 3_600_000;   // ~2.6MB per image (data-URL string length)
@@ -104,24 +104,14 @@ function cleanEstimate(e) {
   return { low: Math.round(lo), high: Math.round(hi) };
 }
 
-async function identify(images, note) {
-  const platform = process.env.SELL_PLATFORM || "Vinted";
-  const imgBlocks = images.map((im) => ({ type: "image", source: { type: "base64", media_type: im.mediaType, data: im.b64 } }));
-  const text =
-`You are an expert vintage-clothing identifier helping a reseller price an item. You may be given SEVERAL photos of the SAME item (different angles and its labels) — use them all together.
-
-${RULES}
-
-For "estimated_resale_eur", give the realistic secondhand price on ${platform} for a buyer in Ireland, in the condition actually visible in the photos.
-Call the report_item tool with your assessment.`;
-
+async function callModel(model, imgBlocks, text) {
   let r;
   try {
     r = await fetchT("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "x-api-key": process.env.ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
       body: JSON.stringify({
-        model: MODEL, max_tokens: 1000, temperature: 0,
+        model, max_tokens: 1000, temperature: 0,
         tools: [IDENTITY_TOOL], tool_choice: { type: "tool", name: "report_item" },
         messages: [{ role: "user", content: [...imgBlocks, { type: "text", text }] }],
       }),
@@ -134,13 +124,39 @@ Call the report_item tool with your assessment.`;
   if (data.stop_reason === "max_tokens") throw new StageError("identify_truncated", "model reply hit max_tokens");
   const block = (data.content || []).find((b) => b.type === "tool_use");
   if (!block || !block.input) throw new StageError("identify_failed", "no tool_use block in reply");
-  const id = block.input;
+  return block.input;
+}
+function finaliseId(id, model) {
   id.estimated_resale_eur = cleanEstimate(id.estimated_resale_eur);
   const pt = Number(id.price_tag_eur);
   id.price_tag_eur = (isFinite(pt) && pt > 0 && pt < 100000) ? Math.round(pt * 100) / 100 : null; // sanitise
   id.search_query = buildQuery(id);   // fix #4: deterministic, not model free-text
-  id.model_used = MODEL;
+  id.model_used = model;
   return id;
+}
+
+async function identify(images, note) {
+  const platform = process.env.SELL_PLATFORM || "Vinted";
+  const imgBlocks = images.map((im) => ({ type: "image", source: { type: "base64", media_type: im.mediaType, data: im.b64 } }));
+  const text =
+`You are an expert vintage-clothing identifier helping a reseller price an item. You may be given SEVERAL photos of the SAME item (different angles and its labels) — use them all together.
+
+${RULES}
+
+For "estimated_resale_eur", give the realistic secondhand price on ${platform} for a buyer in Ireland, in the condition actually visible in the photos.
+Call the report_item tool with your assessment.`;
+
+  const id = await callModel(MODEL, imgBlocks, text);
+  // fix #5: if the default model is UNSURE, re-run identification once on a stronger model.
+  if (String(id.confidence || "").toLowerCase() === "low" && ESCALATION_MODEL) {
+    try {
+      const better = await callModel(ESCALATION_MODEL, imgBlocks, text);
+      return finaliseId(better, ESCALATION_MODEL);
+    } catch (e) {
+      console.error("escalation failed, keeping default model:", e.message);
+    }
+  }
+  return finaliseId(id, MODEL);
 }
 
 // ---- 2. (optional) filtered eBay comps -----------------------------------
