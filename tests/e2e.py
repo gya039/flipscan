@@ -191,6 +191,31 @@ def validate_lensweb(resp, src):
         add("web_shape", ("pages" in d) or ("best_guess" in d), "pages=%d" % len(d.get("pages") or []))
     return checks
 
+# ---------------- driving source (mirror index.html fixes #1/#3) ----------------
+def mid_eur(raw, use="anchor"):
+    if not raw or (raw.get("count") or 0) == 0:
+        return None
+    cur = raw.get("currency", "EUR")
+    v = raw.get("median") if use == "median" else (raw.get("anchor") if raw.get("anchor") is not None else raw.get("median"))
+    return eur(v, cur)
+
+def compute_driver(comps, sold, vinted, estimate_mid):
+    cand = []  # priority order: eBay sold, Vinted, eBay asking
+    if sold and (sold.get("count") or 0) >= 5 and mid_eur(sold, "median") is not None:
+        cand.append({"key": "eBay sold", "mid": mid_eur(sold, "median"), "count": sold["count"], "min": 5})
+    if vinted and (vinted.get("count") or 0) >= 8 and vinted.get("country") == "ie" and mid_eur(vinted) is not None:
+        cand.append({"key": "Vinted", "mid": mid_eur(vinted), "count": vinted["count"], "min": 8})
+    if comps and (comps.get("count") or 0) >= 8 and mid_eur(comps) is not None:
+        cand.append({"key": "eBay asking", "mid": mid_eur(comps), "count": comps["count"], "min": 8})
+    if len(cand) >= 2:
+        mids = [c["mid"] for c in cand]
+        if max(mids) > min(mids) * 2:
+            return min(cand, key=lambda c: c["mid"]), True
+        return cand[0], False
+    if len(cand) == 1:
+        return cand[0], False
+    return {"key": "AI estimate", "mid": estimate_mid, "count": 0, "min": 0}, False
+
 # ---------------- maths (mirror index.html) ----------------
 def max_buy(resale):
     af = resale - resale * COSTS["fee"] / 100.0 - COSTS["post"] - COSTS["pack"]
@@ -290,6 +315,7 @@ def main():
     ap.add_argument("--no-sold", action="store_true")
     ap.add_argument("--no-vinted", action="store_true")
     ap.add_argument("--no-log", action="store_true")
+    ap.add_argument("--no-twice", action="store_true", help="skip the 2nd scan used for the stable-query check")
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--only", default=None, help="only photos whose filename contains this substring")
     ap.add_argument("--base", default=None)
@@ -314,8 +340,9 @@ def main():
     print("=" * 56)
     print("FlipScan E2E — target %s" % BASE)
     print("photos: %d  %s" % (n, photos))
+    scan_calls = n if args.no_twice else 2 * n
     print("PAID CALLS THIS RUN:")
-    print("  /api/scan   : %d  (Anthropic — your AI credit)" % n)
+    print("  /api/scan   : %d  (Anthropic — your AI credit%s)" % (scan_calls, "" if args.no_twice else "; 2x per photo for the stable-query check"))
     print("  /api/sold   : %d  (SoldComps, 100/mo free)" % sold_calls)
     print("  /api/vinted : %d  (Apify, ~EUR0.03 each)" % vinted_calls)
     print("  /api/lens   : %d  (SerpApi, 100/mo free)" % lens_calls)
@@ -358,6 +385,13 @@ def main():
         comps = scan["json"].get("comps") if scan["status"] == 200 else None
         q = query_of(idn)
 
+        # fix #4: same photo scanned twice should produce the SAME (deterministic) search_query
+        if not args.no_twice:
+            scan2 = post("/api/scan", {"images": [img]}); endpoint_lat["scan"].append(scan2["latency"])
+            q2 = query_of((scan2["json"].get("identity") or {}) if scan2["status"] == 200 else {})
+            row["checks"].append(("stable_search_query", bool(q) and q == q2, "run1 '%s' vs run2 '%s'" % (q, q2)))
+            time.sleep(1)
+
         asking_med = None
         if comps and not comps.get("error") and (comps.get("count") or 0) > 0 and comps.get("median") is not None:
             asking_med = eur(comps["median"], comps.get("currency"))
@@ -390,17 +424,32 @@ def main():
             r = post("/api/lens", {"image": img}); endpoint_lat["lens"].append(r["latency"]); row["checks"] += validate_lensweb(r, "lens")
             r = post("/api/web", {"image": img}); endpoint_lat["web"].append(r["latency"]); row["checks"] += validate_lensweb(r, "web")
 
-        # Max Buy + verdict (mirror index.html), flag absurd
-        if resale_anchor:
-            mb, af = max_buy(resale_anchor)
+        # driving source + Max Buy + verdict (mirror fixes #1/#3)
+        est = idn.get("estimated_resale_eur") or {}
+        est_mid = (((est.get("low") or 0) + (est.get("high") or 0)) / 2) or None
+        driver, _dis = compute_driver(comps if comps and not comps.get("error") else None, row.get("_sold_raw"), row.get("_vinted_raw"), est_mid)
+        row["driver_src"] = driver["key"]
+        resale = driver["mid"]
+        if resale:
+            mb, af = max_buy(resale)
             row["max_buy"] = mb
-            absurd = (not math.isfinite(mb)) or (asking_med and mb > asking_med)
-            row["checks"].append(("max_buy_sane", not absurd, "MaxBuy %s vs median %s" % (mb, row["asking_med"])))
+            absurd = (not math.isfinite(mb)) or (mb > resale)
+            row["checks"].append(("max_buy_sane", not absurd, "MaxBuy %s vs driver(%s) €%s" % (mb, driver["key"], round(resale))))
             tr = truth.get(fn) or {}
             paid = float(tr["paid"]) if tr.get("paid") else max(1.0, round(mb * 0.5))
-            v, net, mult = verdict(resale_anchor, paid)
+            v, net, mult = verdict(resale, paid)
             row["verdict"] = "%s (paid €%s)" % (v, round(paid))
             row["checks"].append(("verdict_finite", net is not None and math.isfinite(net), "net %s" % net))
+            if driver.get("min"):  # fix #1: driver must have at least its minimum comp count
+                row["checks"].append(("driver_meets_min", (driver.get("count") or 0) >= driver["min"], "%s count %s >= %s" % (driver["key"], driver.get("count"), driver["min"])))
+            tmids = [m for m in [
+                mid_eur(row.get("_sold_raw"), "median") if (row.get("_sold_raw") and (row["_sold_raw"].get("count") or 0) >= 5) else None,
+                mid_eur(row.get("_vinted_raw")) if (row.get("_vinted_raw") and (row["_vinted_raw"].get("count") or 0) >= 8 and row["_vinted_raw"].get("country") == "ie") else None,
+                mid_eur(comps) if (comps and (comps.get("count") or 0) >= 8) else None,
+            ] if m]
+            if len(tmids) >= 2 and max(tmids) > min(tmids) * 2:  # fix #3: disagreement -> price off the lower
+                row["checks"].append(("disagreement_uses_lower", abs(resale - min(tmids)) < 0.6,
+                                      "spread %.1fx -> driver EUR%s lowest EUR%.0f" % (max(tmids) / min(tmids), round(resale), min(tmids))))
         else:
             row["checks"].append(("has_a_price", False, "no comps and no estimate"))
 

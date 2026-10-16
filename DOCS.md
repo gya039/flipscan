@@ -361,6 +361,23 @@ On a comps failure it is `{ error: "comps_failed" }`; with no eBay keys it is `n
   tag + sold/avg-days/in-band stats, "Which price to trust" per-source bars, All/Holding/
   Listed/Sold filter chips, tap-to-edit rows, Export CSV. All features, calcs and API calls
   from v1.x preserved — this was visual/layout only.
+- **v2.1** — **Pricing-trust fixes** (surfaced by the E2E harness):
+  1. **Thin comps can't drive the price.** Max Buy + verdict rest on a trustworthy driving
+     source (eBay sold ≥5, Vinted ≥8 AND Ireland, eBay asking ≥8), in that order, else the AI
+     estimate. Thin sources are badged + excluded; result shows "Priced off X · N".
+  2. **Clean generic results before anchoring.** For unknown-brand searches, drop outliers
+     (<0.4× / >2.5× the raw median) and anchor on the cleaned **median** (not p30); branded
+     keeps p30. Applied to eBay asking (`scan.js`) + Vinted (`vinted.js`).
+  3. **Disagreement warning.** Two trustworthy sources' medians differing >2× show an amber
+     "Sources disagree — €X to €Y" line and Max Buy prices off the **lower** source.
+  4. **Stable, correctable ID.** `search_query` is built in code from structured fields
+     (brand-if-known + colour + material + item_type), not model free text (added
+     `colour`/`material`). Brand + item-type are **tappable**; editing re-runs only the comps
+     via new **`api/comps.js`** (no vision call).
+  5. **Escalate low confidence.** A `low` Haiku ID re-runs once on `ESCALATION_MODEL`
+     (default `claude-sonnet-4-5`, env-overridable, `""` disables); `model_used` logged.
+  Harness: Pillow browser-match resize + behavioural checks (sources >2.5×, thin Vinted,
+  duplicate medians, brand-vs-truth, driver-meets-min, disagreement-uses-lower, stable query).
 - **v1.4** — **Outcome tracking** (deep-dive rec #4). The log now records, on save,
   `price_source` (AI / eBay asking / eBay sold / Vinted — whichever the verdict used),
   the predicted `band_low`/`band_high`, and `logged_at`. `log.html` gains per-item
