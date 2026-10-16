@@ -607,7 +607,12 @@ function renderCard(data, el, n, img){
   function rebase(){
     const order=[srcs.sold, srcs.vinted, srcs.asking].filter(trusted);
     let base=null, disagree=null;
-    if(order.length>=1){ base=order[0]; }
+    if(order.length>=2){
+      const mids=order.map(s=>s.mid), mx=Math.max(...mids), mn=Math.min(...mids);
+      if(mx > mn*2){ base=order.reduce((a,b)=>b.mid<a.mid?b:a); disagree={lo:mn,hi:mx}; }  // fix #3: price off the LOWER
+      else base=order[0];
+    }
+    else if(order.length>=1){ base=order[0]; }
     else { base=(srcs.asking.state==="ready"&&srcs.asking.isEstimate)?srcs.asking:estimate; }
     if(base){ resaleEur=base.mid; basis=base.basis; priceSource=base.priceSource; bandLow=base.low; bandHigh=base.high; }
     else resaleEur=null;
