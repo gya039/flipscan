@@ -65,11 +65,12 @@ const IDENTITY_TOOL = {
       brand: { type: "string", description: "Maker from the neck/care label, or 'unknown'. NOT a printed graphic." },
       item_type: { type: "string", description: "e.g. 'long-sleeve floral top','track jacket'. Include sleeve length for tops when visible." },
       era: { type: "string", description: "'1990s','Y2K','2000s','unknown', or 'modern repro?'." },
-      key_features: { type: "string", description: "Colour, pattern, notable details, any printed graphic." },
+      key_features: { type: "string", description: "Pattern, notable details, any printed graphic (colour goes in 'colour')." },
+      colour: { type: "string", description: "Main colour(s), lowercase, 1-3 words, e.g. 'black','mustard yellow','navy'. '' if unclear." },
+      material: { type: "string", description: "Main material if clear, lowercase, one word, e.g. 'leather','denim','wool','nylon','cotton'. '' if unsure." },
       size: { type: "string", description: "Only if readable on the label, else 'unknown'." },
       condition_notes: { type: "string", description: "Visible flaws only (stains/holes/pilling/fading)." },
       notes: { type: "string", description: "One short, plain line like a mate would say — what makes it worth money, or what to double-check. Everyday words only; NO marketing speak (avoid 'appeals to buyers', 'nostalgia', 'sought-after', 'coveted')." },
-      search_query: { type: "string", description: "SHORT eBay-style search to find MANY comparable sold listings: about 3-5 words — brand + item type + at most ONE key descriptor. Drop colour, era and extra adjectives; a long/specific string matches too few listings. No 'unknown', no filler." },
       authenticity_flags: { type: "string", description: "Short note if anything looks fake/bootleg, else 'none'." },
       price_tag_eur: { type: ["number", "null"], description: "ONLY if a shop/charity/thrift PRICE STICKER or hand-written price tag is clearly VISIBLE on the item in the photo, the number on it, in EUR (convert from £/$ at a rough rate if needed). This is what it costs to BUY, not a size or product code. If no price tag is clearly readable, use null. Never guess a price here." },
       confidence: { type: "string", enum: ["high", "medium", "low"], description: "Overall confidence in the identification." },
@@ -80,9 +81,20 @@ const IDENTITY_TOOL = {
         required: ["low", "high"],
       },
     },
-    required: ["brand", "item_type", "era", "search_query", "confidence", "estimated_resale_eur"],
+    required: ["brand", "item_type", "era", "confidence", "estimated_resale_eur"],
   },
 };
+
+// fix #4: build the eBay/Vinted query deterministically from structured fields — brand (if
+// known) + colour + material + item_type — so the same fields always give the same query,
+// and editing a field re-derives it. No free-text from the model.
+function buildQuery(id) {
+  const parts = [
+    (id.brand && String(id.brand).toLowerCase() !== "unknown") ? id.brand : "",
+    id.colour, id.material, id.item_type,
+  ].map((x) => String(x || "").trim()).filter(Boolean);
+  return parts.join(" ").replace(/\s+/g, " ").slice(0, 80);
+}
 
 function cleanEstimate(e) {
   if (!e) return null;
@@ -126,6 +138,7 @@ Call the report_item tool with your assessment.`;
   id.estimated_resale_eur = cleanEstimate(id.estimated_resale_eur);
   const pt = Number(id.price_tag_eur);
   id.price_tag_eur = (isFinite(pt) && pt > 0 && pt < 100000) ? Math.round(pt * 100) / 100 : null; // sanitise
+  id.search_query = buildQuery(id);   // fix #4: deterministic, not model free-text
   id.model_used = MODEL;
   return id;
 }

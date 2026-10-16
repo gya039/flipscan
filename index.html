@@ -177,6 +177,10 @@
   .idmeta{flex:1;min-width:0}
   .idbrand{font-family:var(--display);font-weight:800;font-size:24px;letter-spacing:-.02em;line-height:1.05}
   .idsub{color:var(--muted);font-size:14px;margin-top:2px}
+  .idbrand.editable,.idsub.editable{cursor:pointer}
+  .idbrand.editable:active,.idsub.editable:active{opacity:.7}
+  .idbrand.editable{text-decoration:underline;text-decoration-style:dotted;text-decoration-color:var(--line-strong);text-underline-offset:4px}
+  .idsub.editable{text-decoration:underline;text-decoration-style:dotted;text-decoration-color:var(--line-strong);text-underline-offset:3px}
   .idchips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
   .idchip{font-size:12px;padding:3px 9px;border-radius:999px;background:var(--chip);color:var(--muted)}
   .idchip.sure{background:var(--chipg-bg);color:var(--chipg);font-weight:600}
@@ -397,7 +401,7 @@ async function post(images){
   if(!res.ok || data.error) throw new Error(prettyErr(data.error) || ("HTTP "+res.status));
   return data;
 }
-function prettyErr(e){ return ({ identify_timeout:"the AI timed out — try again", identify_truncated:"the AI reply was cut off — try again", identify_failed:"couldn't read the photo", too_many_images:"max 5 photos per item", image_too_large:"a photo was too big", payload_too_large:"too much image data", bad_image_format:"unsupported image", unauthorized:"wrong access code", server_misconfigured:"app not configured (keys)", server_error:"server error", sold_quota:"monthly sold-lookups used up (resets next month)", sold_auth:"sold-price key invalid", sold_failed:"sold lookup failed", sold_timeout:"sold lookup timed out", no_query:"nothing to search", log_not_configured:"scan log not set up (Upstash keys)", lens_not_configured:"shop search not set up (SerpApi/Upstash keys)", lens_failed:"shop search failed", lens_timeout:"shop search timed out", lens_quota:"monthly shop-searches used up (resets next month)", web_not_configured:"reverse image search not set up (Vision key)", web_failed:"reverse image search failed", web_timeout:"reverse image search timed out", vinted_not_configured:"Vinted lookup not set up (Apify key)" })[e] || e; }
+function prettyErr(e){ return ({ identify_timeout:"the AI timed out — try again", identify_truncated:"the AI reply was cut off — try again", identify_failed:"couldn't read the photo", too_many_images:"max 5 photos per item", image_too_large:"a photo was too big", payload_too_large:"too much image data", bad_image_format:"unsupported image", unauthorized:"wrong access code", server_misconfigured:"app not configured (keys)", server_error:"server error", sold_quota:"monthly sold-lookups used up (resets next month)", sold_auth:"sold-price key invalid", sold_failed:"sold lookup failed", sold_timeout:"sold lookup timed out", no_query:"nothing to search", log_not_configured:"scan log not set up (Upstash keys)", lens_not_configured:"shop search not set up (SerpApi/Upstash keys)", lens_failed:"shop search failed", lens_timeout:"shop search timed out", lens_quota:"monthly shop-searches used up (resets next month)", web_not_configured:"reverse image search not set up (Vision key)", web_failed:"reverse image search failed", web_timeout:"reverse image search timed out", vinted_not_configured:"Vinted lookup not set up (Apify key)", comps_not_configured:"comps not set up (eBay keys)", comps_failed:"couldn't re-check comps" })[e] || e; }
 
 function resize(file,max,q){ return new Promise((res,rej)=>{ const img=new Image(); img.onload=()=>{ let {width:w,height:h}=img; if(Math.max(w,h)>max){ const r=max/Math.max(w,h); w=Math.round(w*r); h=Math.round(h*r);} const c=document.createElement("canvas"); c.width=w;c.height=h; c.getContext("2d").drawImage(img,0,0,w,h); res(c.toDataURL("image/jpeg",q)); }; img.onerror=rej; img.src=URL.createObjectURL(file); }); }
 function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
@@ -631,6 +635,33 @@ function renderCard(data, el, n, img){
 
   // Price-tag reading: if the AI read a shop/charity price sticker, prefill "what you paid".
   if(id.price_tag_eur){ input.value=id.price_tag_eur; const f=el.querySelector(".tagflag"); if(f) f.style.display="inline"; updateVerdict(); }
+
+  // fix #4: tap the brand / item-type to correct it — re-runs ONLY the comps (not the vision call).
+  function clientQuery(){ return [ (id.brand&&id.brand.toLowerCase()!=="unknown")?id.brand:"", id.colour, id.material, id.item_type ].map(x=>String(x||"").trim()).filter(Boolean).join(" ").replace(/\s+/g," ").slice(0,80); }
+  async function reComps(){
+    const dn=el.querySelector(".drivernote"); const prev=dn.textContent; dn.textContent="Re-checking comps…"; dn.style.display="block";
+    try{
+      const r=await fetch("/api/comps",{method:"POST",headers:{"content-type":"application/json","x-flipscan-secret":getSecret()},body:JSON.stringify({query:clientQuery(), branded:!!(id.brand&&id.brand.toLowerCase()!=="unknown")})});
+      if(r.status===401){ localStorage.removeItem("flipscan_secret"); throw new Error("Access code rejected — scan again."); }
+      const c=await r.json(); if(!r.ok||c.error) throw new Error(prettyErr(c.error)||"comps re-check failed");
+      srcs.asking = srcFromComps(id, c);
+      if(viewed==="asking") renderValue();
+      rebase();
+    }catch(e){ dn.textContent=prev; alert(e.message); }
+  }
+  function editField(field, labelText){
+    const v = prompt("Fix the "+labelText, id[field]||"");
+    if(v==null) return;
+    id[field]= v.trim();
+    el.querySelector(".idbrand").innerHTML = `${n?`<span style="color:var(--faint)">#${n} </span>`:""}${esc(id.brand||"Unknown")}`;
+    el.querySelector(".idsub").textContent = `${id.item_type||""}${id.era&&id.era!=="unknown"?" · "+id.era:""}`;
+    reComps();
+  }
+  const brandEl=el.querySelector(".idbrand"), subEl=el.querySelector(".idsub");
+  brandEl.classList.add("editable"); brandEl.title="Tap to fix the brand";
+  subEl.classList.add("editable"); subEl.title="Tap to fix the item type";
+  brandEl.addEventListener("click", ()=>editField("brand","brand"));
+  subEl.addEventListener("click", ()=>editField("item_type","item type"));
 
   // (Vinted IE + eBay sold prices are fetched on demand via fetchSource() into the source tabs above.)
 
