@@ -102,6 +102,19 @@ def query_of(idn):
         return sq
     return " ".join([x for x in [idn.get("brand"), idn.get("item_type"), idn.get("era")] if x]).strip()
 
+def query_levels(idn):
+    brand = idn.get("brand", "") if (idn.get("brand", "").lower() != "unknown") else ""
+    def j(a): return " ".join(x.strip() for x in a if x and x.strip())[:80]
+    full = j([brand, idn.get("colour", ""), idn.get("material", ""), idn.get("item_type", "")])
+    noMat = j([brand, idn.get("colour", ""), idn.get("item_type", "")])
+    noCol = j([brand, idn.get("item_type", "")])
+    out = [{"level": "full", "q": full}]
+    if noMat and noMat != full: out.append({"level": "no-material", "q": noMat})
+    if noCol and noCol != noMat and noCol != full: out.append({"level": "no-colour", "q": noCol})
+    return out
+
+def is_branded(idn): return idn.get("brand", "").lower() not in ("", "unknown")
+
 def num(x):
     return isinstance(x, (int, float)) and not isinstance(x, bool)
 
@@ -200,20 +213,19 @@ def mid_eur(raw, use="anchor"):
     return eur(v, cur)
 
 def compute_driver(comps, sold, vinted, estimate_mid):
-    cand = []  # priority order: eBay sold, Vinted, eBay asking
-    if sold and (sold.get("count") or 0) >= 5 and mid_eur(sold, "median") is not None:
-        cand.append({"key": "eBay sold", "mid": mid_eur(sold, "median"), "count": sold["count"], "min": 5})
-    if vinted and (vinted.get("count") or 0) >= 8 and vinted.get("country") == "ie" and mid_eur(vinted) is not None:
-        cand.append({"key": "Vinted", "mid": mid_eur(vinted), "count": vinted["count"], "min": 8})
-    if comps and (comps.get("count") or 0) >= 8 and mid_eur(comps) is not None:
-        cand.append({"key": "eBay asking", "mid": mid_eur(comps), "count": comps["count"], "min": 8})
-    if len(cand) >= 2:
-        mids = [c["mid"] for c in cand]
-        if max(mids) > min(mids) * 2:
-            return min(cand, key=lambda c: c["mid"]), True
-        return cand[0], False
-    if len(cand) == 1:
-        return cand[0], False
+    # Decision 1: pure PRIORITY — eBay sold(>=5) -> eBay asking(>=8) -> Vinted(>=8 IE) -> AI.
+    # Disagreement is INFO-only and does NOT move the driver.
+    sold_ok = bool(sold and (sold.get("count") or 0) >= 5 and mid_eur(sold, "median") is not None)
+    ask_ok = bool(comps and (comps.get("count") or 0) >= 8 and mid_eur(comps) is not None)
+    vin_ok = bool(vinted and (vinted.get("count") or 0) >= 8 and vinted.get("country") == "ie" and mid_eur(vinted) is not None)
+    trusted = ([mid_eur(sold, "median")] if sold_ok else []) + ([mid_eur(comps)] if ask_ok else []) + ([mid_eur(vinted)] if vin_ok else [])
+    dis = len(trusted) >= 2 and max(trusted) > min(trusted) * 2
+    if sold_ok:
+        return {"key": "eBay sold", "mid": mid_eur(sold, "median"), "count": sold["count"], "min": 5}, dis
+    if ask_ok:
+        return {"key": "eBay asking", "mid": mid_eur(comps), "count": comps["count"], "min": 8}, dis
+    if vin_ok:
+        return {"key": "Vinted", "mid": mid_eur(vinted), "count": vinted["count"], "min": 8}, dis
     return {"key": "AI estimate", "mid": estimate_mid, "count": 0, "min": 0}, False
 
 # ---------------- maths (mirror index.html) ----------------
@@ -414,7 +426,7 @@ def main():
             if med: row["sold_med"] = round(med, 1)
             row["_sold_raw"] = r["json"]
         if not args.no_vinted and q:
-            r = post("/api/vinted", {"query": q}); endpoint_lat["vinted"].append(r["latency"])
+            r = post("/api/vinted", {"query": q, "queries": query_levels(idn), "branded": is_branded(idn)}); endpoint_lat["vinted"].append(r["latency"])
             save_raw(outdir, stem + ".vinted", {"query": q, "response": r["json"]})
             ch, med = validate_prices(r, "vinted"); row["checks"] += ch
             row["vinted_med_num"] = med
@@ -456,9 +468,12 @@ def main():
                 mid_eur(row.get("_vinted_raw")) if (row.get("_vinted_raw") and (row["_vinted_raw"].get("count") or 0) >= 8 and row["_vinted_raw"].get("country") == "ie") else None,
                 mid_eur(comps) if (comps and (comps.get("count") or 0) >= 8) else None,
             ] if m]
-            if len(tmids) >= 2 and max(tmids) > min(tmids) * 2:  # fix #3: disagreement -> price off the lower
-                row["checks"].append(("disagreement_uses_lower", abs(resale - min(tmids)) < 0.6,
-                                      "spread %.1fx -> driver EUR%s lowest EUR%.0f" % (max(tmids) / min(tmids), round(resale), min(tmids))))
+            if len(tmids) >= 2 and max(tmids) > min(tmids) * 2:  # Decision 1: disagreement is INFO-only; driver stays priority
+                sold_ok = row.get("_sold_raw") and (row["_sold_raw"].get("count") or 0) >= 5
+                ask_ok = comps and (comps.get("count") or 0) >= 8
+                expected = "eBay sold" if sold_ok else "eBay asking" if ask_ok else "Vinted"
+                row["checks"].append(("driver_follows_priority", driver["key"] == expected,
+                                      "spread %.1fx -> driver %s (priority, not lowest €%.0f)" % (max(tmids) / min(tmids), driver["key"], min(tmids))))
         else:
             row["checks"].append(("has_a_price", False, "no comps and no estimate"))
 
