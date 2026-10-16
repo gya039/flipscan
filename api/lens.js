@@ -59,9 +59,15 @@ export default async function handler(req, res) {
     // 3) call SerpApi Google Lens
     const country = process.env.SERPAPI_COUNTRY || "ie";
     const url = `https://serpapi.com/search.json?engine=google_lens&type=visual_matches&country=${encodeURIComponent(country)}&url=${encodeURIComponent(imgUrl)}&api_key=${process.env.SERPAPI_KEY}`;
+    // Decision #4: one retry on timeout, then the user-friendly error.
     let r;
-    try { r = await fetchT(url, {}, 20000); }
-    catch (e) { console.error("lens timeout", e.message); return res.status(504).json({ error: "lens_timeout" }); }
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try { r = await fetchT(url, {}, 20000); break; }
+      catch (e) {
+        console.error("lens timeout attempt", attempt, e.message);
+        if (attempt === 2) return res.status(504).json({ error: "lens_timeout" });
+      }
+    }
     if (r.status === 429) return res.status(429).json({ error: "lens_quota" });
     if (!r.ok) { console.error("lens http", r.status, await r.text().catch(() => "")); return res.status(502).json({ error: "lens_failed" }); }
 
