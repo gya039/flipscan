@@ -378,6 +378,17 @@ On a comps failure it is `{ error: "comps_failed" }`; with no eBay keys it is `n
      (default `claude-sonnet-4-5`, env-overridable, `""` disables); `model_used` logged.
   Harness: Pillow browser-match resize + behavioural checks (sources >2.5×, thin Vinted,
   duplicate medians, brand-vs-truth, driver-meets-min, disagreement-uses-lower, stable query).
+- **v2.2** — **Pricing-trust round 2** (after-run decisions):
+  1. **Trust-ranked driver** (replaces "price off the lower"): eBay sold ≥5 → eBay asking ≥8
+     → Vinted ≥8 IE → AI. Vinted never drives when sold/asking qualify. Disagreement warning
+     is **info-only** now. Added a **"On Vinted IE you'll compete with listings around €X"**
+     line + an amber **"Vinted IE sellers price lower"** note when the driver is >1.5× the
+     Vinted median.
+  2. **Broaden on thin.** If a source returns < its min with the full query, retry **without
+     material**, then **without colour** (eBay + Vinted); the `queryLevel` used is returned and
+     shown in the note + harness.
+  3. Harness `sources_within_2.5x` compares **only sources meeting their minimum** (Vinted IE).
+  4. **Lens** retries once on timeout before erroring.
 - **v1.4** — **Outcome tracking** (deep-dive rec #4). The log now records, on save,
   `price_source` (AI / eBay asking / eBay sold / Vinted — whichever the verdict used),
   the predicted `band_low`/`band_high`, and `logged_at`. `log.html` gains per-item
