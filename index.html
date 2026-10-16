@@ -201,6 +201,8 @@
   .disagree{align-items:center;gap:8px;margin-top:10px;background:#2f2713;color:var(--warn);border-radius:12px;padding:10px 12px;font-size:13px;line-height:1.4}
   .paycard{margin-top:10px}
   .thinbadge{display:flex;align-items:center;gap:7px;margin-top:10px;color:var(--warn);font-size:12px}
+  .vintedline{font-size:12px;color:var(--teal);margin-top:10px;line-height:1.45}
+  .vintedline .vlow{display:block;margin-top:4px;color:var(--warn);font-weight:600}
 
   .rlabelrow{display:flex;align-items:baseline;justify-content:space-between;margin-top:22px}
   .rlabel{font-family:var(--mono);font-size:12px;letter-spacing:.12em;color:var(--muted)}
@@ -514,7 +516,7 @@ function renderCard(data, el, n, img){
       </div>
     </div>
     ${extra}
-    <div class="drivernote"></div><div class="disagree" style="display:none"></div>
+    <div class="drivernote"></div><div class="disagree" style="display:none"></div><div class="vintedline" style="display:none"></div>
     <div class="paycard"></div>
     <div class="rlabelrow"><span class="rlabel">RESALE VALUE</span><span class="rhint">tap a source</span></div>
     <div class="srctabs">
@@ -609,22 +611,26 @@ function renderCard(data, el, n, img){
   // fix #1/#3: pick the trustworthy driving source (sold≥5 → Vinted≥8 IE → asking≥8 → AI),
   // and if two trustworthy sources disagree >2x, warn and price off the LOWER one.
   function rebase(){
-    const order=[srcs.sold, srcs.vinted, srcs.asking].filter(trusted);
-    let base=null, disagree=null;
-    if(order.length>=2){
-      const mids=order.map(s=>s.mid), mx=Math.max(...mids), mn=Math.min(...mids);
-      if(mx > mn*2){ base=order.reduce((a,b)=>b.mid<a.mid?b:a); disagree={lo:mn,hi:mx}; }  // fix #3: price off the LOWER
-      else base=order[0];
-    }
-    else if(order.length>=1){ base=order[0]; }
-    else { base=(srcs.asking.state==="ready"&&srcs.asking.isEstimate)?srcs.asking:estimate; }
+    // Driver is pure PRIORITY among trustworthy sources: eBay sold → eBay asking → Vinted IE → AI.
+    // Vinted never moves the price when eBay sold/asking qualify; disagreement is INFO-only now.
+    const base = trusted(srcs.sold) ? srcs.sold : trusted(srcs.asking) ? srcs.asking : trusted(srcs.vinted) ? srcs.vinted
+      : ((srcs.asking.state==="ready"&&srcs.asking.isEstimate)?srcs.asking:estimate);
     if(base){ resaleEur=base.mid; basis=base.basis; priceSource=base.priceSource; bandLow=base.low; bandHigh=base.high; }
     else resaleEur=null;
-    const dn=el.querySelector(".drivernote"), dis=el.querySelector(".disagree");
+    const dn=el.querySelector(".drivernote"), dis=el.querySelector(".disagree"), vl=el.querySelector(".vintedline");
     if(base){ const u=base.key==="sold"?"sales":base.key==="vinted"?"listings":"comps"; dn.textContent=base.isEstimate?"Priced off the AI estimate — no solid comps yet":`Priced off ${base.label}${base.count?` · ${base.count} ${u}`:""}`; dn.style.display="block"; }
     else dn.style.display="none";
-    if(disagree){ dis.style.display="flex"; dis.innerHTML=`${warnMini()} Sources disagree — €${Math.round(disagree.lo)} to €${Math.round(disagree.hi)}. Pricing off the lower.`; }
+    // disagreement among TRUSTED sources — informational only, doesn't move the driver
+    const ts=[srcs.sold,srcs.asking,srcs.vinted].filter(trusted).map(s=>s.mid);
+    if(ts.length>=2 && Math.max(...ts) > Math.min(...ts)*2){ dis.style.display="flex"; dis.innerHTML=`${warnMini()} Sources disagree — €${Math.round(Math.min(...ts))} to €${Math.round(Math.max(...ts))}.`; }
     else dis.style.display="none";
+    // Vinted IE competition line (+ "sellers price lower" note when the driver is >1.5x the Vinted median)
+    const vIE = (srcs.vinted.state==="ready" && srcs.vinted.country==="ie" && srcs.vinted.mid!=null) ? srcs.vinted.mid : null;
+    if(vIE){
+      let h=`On Vinted IE you'll compete with listings around €${Math.round(vIE)}.`;
+      if(base && !base.isEstimate && resaleEur > vIE*1.5) h += ` <b class="vlow">Vinted IE sellers price lower — expect nearer €${Math.round(vIE)} there, or list on eBay.</b>`;
+      vl.innerHTML=h; vl.style.display="block";
+    } else vl.style.display="none";
     updateMaxBuy(); updateVerdict();
   }
 
