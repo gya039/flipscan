@@ -580,7 +580,7 @@ function renderCard(data, el, n, img){
     const label=btn.innerHTML; btn.disabled=true; btn.textContent="Loading…";
     try{
       if(key==="vinted"){
-        const r=await fetch("/api/vinted",{method:"POST",headers:{"content-type":"application/json","x-flipscan-secret":getSecret()},body:JSON.stringify({query})});
+        const r=await fetch("/api/vinted",{method:"POST",headers:{"content-type":"application/json","x-flipscan-secret":getSecret()},body:JSON.stringify({query, branded:!!(id.brand&&id.brand.toLowerCase()!=="unknown")})});
         if(r.status===401){ localStorage.removeItem("flipscan_secret"); throw new Error("Access code rejected — scan again to re-enter."); }
         const d=await r.json(); if(!r.ok||d.error) throw new Error(prettyErr(d.error)||"Vinted lookup failed");
         if(!d.count){ srcs.vinted.state="empty"; srcs.vinted.note="No Vinted listings found."; renderValue(); return; }

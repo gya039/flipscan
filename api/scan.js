@@ -179,10 +179,24 @@ function gradeComps(count, low, median, high) {
   else if (count >= 3) confidence = "medium";
   return { tight, confidence };
 }
-function summarise(items, ccy, market, used, matched) {
+// fix #2: for a GENERIC (unknown-brand) search, drop obvious outliers before anchoring so a
+// few cheap fast-fashion or freak-pricey listings don't drag the percentile. Keep a price only
+// if it's within 0.4x..2.5x the raw median, and only if that leaves a reasonable chunk.
+function cleanPrices(prices) {
+  if (prices.length < 4) return prices;
+  const m = pct(prices, 50);
+  if (!m) return prices;
+  const kept = prices.filter((p) => p >= m * 0.4 && p <= m * 2.5);
+  return kept.length >= Math.max(3, Math.ceil(prices.length * 0.5)) ? kept : prices;
+}
+function summarise(items, ccy, market, used, matched, branded) {
   if (!items.length) return { source: matched === "image" ? "eBay image match" : "eBay active listings (asking)", visual: matched === "image", marketplace: market, query: used, count: 0, currency: ccy, reliable: false, confidence: "low", tight: false, low: null, anchor: null, median: null, high: null, examples: [] };
-  const prices = items.map((i) => parseFloat(i.price.value)).sort((a, b) => a - b);
-  const anchor = pct(prices, 30), low = pct(prices, 10), median = pct(prices, 50), high = pct(prices, 90);
+  let prices = items.map((i) => parseFloat(i.price.value)).sort((a, b) => a - b);
+  const rawCount = prices.length;
+  if (!branded) prices = cleanPrices(prices);
+  const low = pct(prices, 10), median = pct(prices, 50), high = pct(prices, 90);
+  // branded: price off the lower third (p30); generic: median of the cleaned set.
+  const anchor = branded ? pct(prices, 30) : median;
   // Which comps to SHOW (up to 6, every one a tappable link):
   //  - image match: eBay already ranks by VISUAL similarity, so keep that order (most
   //    similar first) — just skip wild price outliers so a freak listing doesn't headline.
@@ -199,12 +213,12 @@ function summarise(items, ccy, market, used, matched) {
   const { tight, confidence } = gradeComps(prices.length, low, median, high);
   return {
     source: matched === "image" ? "eBay image match (visually similar)" : "eBay active listings (asking)",
-    visual: matched === "image", marketplace: market, query: used,
-    count: prices.length, currency: ccy, reliable: prices.length >= MIN_COMPS,
+    visual: matched === "image", marketplace: market, query: used, branded: !!branded,
+    count: prices.length, rawCount, dropped: rawCount - prices.length, currency: ccy, reliable: prices.length >= MIN_COMPS,
     confidence, tight, low, anchor, median, high, examples,
   };
 }
-async function getComps(cleanedQuery, fallbackQuery, imageB64) {
+async function getComps(cleanedQuery, fallbackQuery, imageB64, branded) {
   if (!process.env.EBAY_CLIENT_ID || !process.env.EBAY_CLIENT_SECRET) return null;
   const market = process.env.EBAY_MARKETPLACE || "EBAY_GB";
   const ccy = MARKET_CCY[market] || "GBP";
@@ -216,10 +230,10 @@ async function getComps(cleanedQuery, fallbackQuery, imageB64) {
     try { imageItems = await ebaySearchByImage(imageB64, token, market, ccy); }
     catch (e) { console.error("ebay image search:", e.message); }
   }
-  if (imageItems.length >= IMG_MIN) return summarise(imageItems, ccy, market, "(image match)", "image");
+  if (imageItems.length >= IMG_MIN) return summarise(imageItems, ccy, market, "(image match)", "image", branded);
 
   // 2) Fall back to keyword search (with a broader retry) when image search is unavailable or too thin.
-  if (!cleanedQuery) return imageItems.length ? summarise(imageItems, ccy, market, "(image match)", "image") : null;
+  if (!cleanedQuery) return imageItems.length ? summarise(imageItems, ccy, market, "(image match)", "image", branded) : null;
   let used = cleanedQuery;
   let items = await ebaySearch(cleanedQuery, token, market, ccy);
   if (items.length < MIN_COMPS && fallbackQuery && cleanQuery(fallbackQuery) && cleanQuery(fallbackQuery) !== cleanedQuery) {
@@ -227,8 +241,8 @@ async function getComps(cleanedQuery, fallbackQuery, imageB64) {
     if (broader.length > items.length) { items = broader; used = cleanQuery(fallbackQuery); }
   }
   // If keyword also came back thin but image had a few, prefer the visual matches.
-  if (imageItems.length > items.length) return summarise(imageItems, ccy, market, "(image match)", "image");
-  return summarise(items, ccy, market, used, "keyword");
+  if (imageItems.length > items.length) return summarise(imageItems, ccy, market, "(image match)", "image", branded);
+  return summarise(items, ccy, market, used, "keyword", branded);
 }
 
 // NOTE: Google Vision reverse image search lives in api/web.js now — it's an
@@ -277,7 +291,8 @@ export default async function handler(req, res) {
     let comps = null;
     try {
       const cq = cleanQuery(identity.search_query);
-      comps = await getComps(cq, `${identity.brand} ${identity.item_type}`, parsed[0] && parsed[0].b64);
+      const branded = !!(identity.brand && identity.brand.toLowerCase() !== "unknown");
+      comps = await getComps(cq, `${identity.brand} ${identity.item_type}`, parsed[0] && parsed[0].b64, branded);
     } catch (e) {
       console.error("comps error:", e.message);
       comps = { error: "comps_failed" };

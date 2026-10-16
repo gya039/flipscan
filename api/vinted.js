@@ -37,6 +37,15 @@ function pct(sorted, p) {
   const i = Math.min(sorted.length - 1, Math.max(0, Math.round((p / 100) * (sorted.length - 1))));
   return sorted[i];
 }
+// fix #2: for a generic (unknown-brand) search, drop outliers (<0.4x or >2.5x the raw median)
+// before anchoring so cheap fast-fashion listings don't drag the price down.
+function cleanPrices(prices) {
+  if (prices.length < 4) return prices;
+  const m = pct(prices, 50);
+  if (!m) return prices;
+  const kept = prices.filter((p) => p >= m * 0.4 && p <= m * 2.5);
+  return kept.length >= Math.max(3, Math.ceil(prices.length * 0.5)) ? kept : prices;
+}
 function gradeComps(count, low, median, high) {
   const tight = (low != null && median != null && high != null && median > 0) ? (high - low) <= median * 1.5 : false;
   let confidence = "low";
@@ -77,9 +86,10 @@ export default async function handler(req, res) {
     const raw = String(body.query || "").replace(/\bunknown\b/gi, " ").replace(/\s+/g, " ").trim().slice(0, 200);
     if (!raw) return res.status(400).json({ error: "no_query" });
     const query = raw.split(/\s+/).slice(0, 5).join(" "); // shorter query = more comps
+    const branded = !!body.branded;
 
-    // 24h cache (per query) to keep Apify spend down.
-    const cacheKey = "flipscan:vinted:" + query.toLowerCase();
+    // 24h cache (per query + branded flag) to keep Apify spend down.
+    const cacheKey = "flipscan:vinted:" + (branded ? "b:" : "") + query.toLowerCase();
     try { const cached = await redis(["GET", cacheKey]); if (cached) return res.status(200).json(JSON.parse(cached)); }
     catch (e) { console.error("vinted cache read", e.message); }
 
@@ -99,8 +109,11 @@ export default async function handler(req, res) {
       return res.status(200).json(empty);
     }
 
-    const prices = rows.map((it) => parseFloat(it.price.amount)).sort((a, b) => a - b);
-    const anchor = pct(prices, 30), low = pct(prices, 10), median = pct(prices, 50), high = pct(prices, 90);
+    let prices = rows.map((it) => parseFloat(it.price.amount)).sort((a, b) => a - b);
+    const rawCount = prices.length;
+    if (!branded) prices = cleanPrices(prices);
+    const low = pct(prices, 10), median = pct(prices, 50), high = pct(prices, 90);
+    const anchor = branded ? pct(prices, 30) : median;  // branded: lower-third; generic: cleaned median
     const { tight, confidence } = gradeComps(prices.length, low, median, high);
     // Examples: the 6 priced closest to the anchor (no visual signal from Vinted).
     const examples = [...rows]
@@ -109,7 +122,7 @@ export default async function handler(req, res) {
       .map((it) => ({ title: it.title || it.brand_title || "Vinted listing", price: `€${Math.round(parseFloat(it.price.amount))}`, url: it.url, image: imgOf(it), condition: it.status || "" }));
 
     const result = {
-      source: "Vinted", country, count: prices.length, currency: "EUR",
+      source: "Vinted", country, branded, count: prices.length, rawCount, dropped: rawCount - prices.length, currency: "EUR",
       reliable: prices.length >= WANT, confidence, tight,
       low, anchor, median, high, examples,
     };
