@@ -49,13 +49,15 @@ async function ebaySearch(query, token, market, ccy) {
   if (!r.ok) throw new Error(`ebay browse ${r.status}`);
   return okItems(await r.json(), ccy);
 }
-function summarise(items, ccy, market, used, branded) {
+function summarise(items, ccy, market, used, branded, level) {
   if (!items.length) return { source: "eBay active listings (asking)", visual: false, marketplace: market, query: used, count: 0, currency: ccy, reliable: false, confidence: "low", tight: false, low: null, anchor: null, median: null, high: null, examples: [] };
   let prices = items.map((i) => parseFloat(i.price.value)).sort((a, b) => a - b);
   const rawCount = prices.length;
   if (!branded) prices = cleanPrices(prices);
   const low = pct(prices, 10), median = pct(prices, 50), high = pct(prices, 90);
-  const anchor = branded ? pct(prices, 30) : median;
+  // Part A: generic + broadened query = loose match, anchor on p40 instead of the median.
+  const broadened = !!level && level !== "full" && level !== "image";
+  const anchor = branded ? pct(prices, 30) : (broadened ? pct(prices, 40) : median);
   const picked = [...items].sort((a, b) => Math.abs(parseFloat(a.price.value) - anchor) - Math.abs(parseFloat(b.price.value) - anchor)).slice(0, 6);
   const examples = picked.map((i) => ({ title: i.title, price: `${i.price.value} ${i.price.currency}`, url: i.itemWebUrl, image: (i.image && i.image.imageUrl) || null, condition: i.condition || "" }));
   const { tight, confidence } = gradeComps(prices.length, low, median, high);
@@ -87,7 +89,7 @@ export default async function handler(req, res) {
       if (items.length >= MIN_COMPS) { best = items; bestLevel = level; bestQ = q; break; }
     }
     if (!best) return res.status(502).json({ error: "comps_failed" });
-    const s = summarise(best, ccy, market, bestQ, branded); s.queryLevel = bestLevel;
+    const s = summarise(best, ccy, market, bestQ, branded, bestLevel); s.queryLevel = bestLevel;
     return res.status(200).json(s);
   } catch (e) {
     console.error("comps handler", e);

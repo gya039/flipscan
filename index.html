@@ -448,7 +448,7 @@ function srcFromComps(id, c){
   if(hasComps && c.count>=3){
     const rate=RATE[c.currency]||1;
     return { key:"asking", label:"eBay asking", accent:"var(--accent)", fill:"#7A8A2E", state:"ready",
-      mid:c.anchor*rate, low:c.low*rate, high:c.high*rate, count:c.count, confidence:c.confidence, tight:c.tight,
+      mid:c.anchor*rate, low:c.low*rate, high:c.high*rate, count:c.count, confidence:c.confidence, tight:c.tight, queryLevel:c.queryLevel,
       basis:"what they're asking", priceSource:"eBay asking",
       note:(c.visual?"Visually-matched eBay listings":"eBay asking prices")+broadenNote(c.queryLevel)+".",
       examples: compExamples(c.examples,"ebay.co.uk") };
@@ -468,8 +468,8 @@ function idChipsHtml(id, conf){
   return h;
 }
 function confChipHtml(s){
-  const c=s.confidence||"low", n=s.count||0, cls=c==="high"?"high":c==="medium"?"med":"low";
-  const txt = c==="high"?`${n} comps · tight`:c==="medium"?(n>=8?`${n} comps · varied`:`${n} comps`):(n>0?`${n} comps · guess`:"a guess");
+  const c=s.confidence||"low", n=s.count||0, nd=s.countLabel!=null?s.countLabel:n, cls=c==="high"?"high":c==="medium"?"med":"low";
+  const txt = c==="high"?`${nd} comps · tight`:c==="medium"?(n>=8?`${nd} comps · varied`:`${nd} comps`):(n>0?`${nd} comps · guess`:"a guess");
   return `<div class="vchip ${cls}"><span class="dot"></span>${txt}</div>`;
 }
 function rangeMarkerPct(s){ if(s.low==null||s.high==null||s.high<=s.low) return 50; return Math.max(6,Math.min(94,(s.mid-s.low)/(s.high-s.low)*100)); }
@@ -602,15 +602,15 @@ function renderCard(data, el, n, img){
         const d=await r.json(); if(!r.ok||d.error) throw new Error(prettyErr(d.error)||"Vinted lookup failed");
         if(!d.count){ srcs.vinted.state="empty"; srcs.vinted.note="No Vinted listings found."; renderValue(); return; }
         const cc=(d.country||"ie").toUpperCase();
-        Object.assign(srcs.vinted,{ state:"ready", country:(d.country||"ie"), mid:d.anchor, low:d.low, high:d.high, count:d.count, confidence:d.confidence, tight:d.tight, basis:`what Vinted ${cc} sellers ask`, priceSource:"Vinted", note:`Vinted ${cc} asking prices${broadenNote(d.queryLevel)}.`, examples:compExamples(d.examples,"vinted."+(d.country||"ie")) });
+        Object.assign(srcs.vinted,{ state:"ready", country:(d.country||"ie"), mid:d.anchor, low:d.low, high:d.high, count:d.count, confidence:d.confidence, tight:d.tight, queryLevel:d.queryLevel, basis:`what Vinted ${cc} sellers ask`, priceSource:"Vinted", note:`Vinted ${cc} asking prices${broadenNote(d.queryLevel)}.`, examples:compExamples(d.examples,"vinted."+(d.country||"ie")) });
       } else {
-        const r=await fetch("/api/sold",{method:"POST",headers:{"content-type":"application/json","x-flipscan-secret":getSecret()},body:JSON.stringify({query, queries:queryLevels(id)})});
+        const r=await fetch("/api/sold",{method:"POST",headers:{"content-type":"application/json","x-flipscan-secret":getSecret()},body:JSON.stringify({query, queries:queryLevels(id), branded:!!(id.brand&&id.brand.toLowerCase()!=="unknown")})});
         if(r.status===401){ localStorage.removeItem("flipscan_secret"); throw new Error("Access code rejected — scan again to re-enter."); }
         const d=await r.json(); if(!r.ok||d.error) throw new Error(prettyErr(d.error)||"sold lookup failed");
         if(!d.count){ srcs.sold.state="empty"; srcs.sold.note="No recent eBay sales found."; renderValue(); return; }
         const ccy=d.currency, rate=RATE[ccy]||1;
         const sconf=d.count>=8 ? ((d.high!=null&&d.low!=null&&d.median>0&&(d.high-d.low)<=d.median*1.5)?"high":"medium") : (d.count>=3?"medium":"low");
-        Object.assign(srcs.sold,{ state:"ready", mid:d.median*rate, low:d.low*rate, high:d.high*rate, count:d.count, confidence:sconf, tight:sconf==="high", basis:"what it actually sold for", priceSource:"eBay sold", note:`Real eBay sold prices${broadenNote(d.queryLevel)}.`, examples:compExamples(d.examples,"ebay sold") });
+        Object.assign(srcs.sold,{ state:"ready", mid:(d.anchor!=null?d.anchor:d.median)*rate, low:d.low*rate, high:d.high*rate, count:d.count, countLabel:(d.capped?d.count+"+":null), confidence:sconf, tight:sconf==="high", queryLevel:d.queryLevel, basis:"what it actually sold for", priceSource:"eBay sold", note:`Real eBay sold prices${broadenNote(d.queryLevel)}.`, examples:compExamples(d.examples,"ebay sold") });
       }
       renderValue(); rebase();
     }catch(e){ btn.disabled=false; btn.innerHTML=label; alert(e.message); }
@@ -624,12 +624,22 @@ function renderCard(data, el, n, img){
   function rebase(){
     // Driver is pure PRIORITY among trustworthy sources: eBay sold → eBay asking → Vinted IE → AI.
     // Vinted never moves the price when eBay sold/asking qualify; disagreement is INFO-only now.
-    const base = trusted(srcs.sold) ? srcs.sold : trusted(srcs.asking) ? srcs.asking : trusted(srcs.vinted) ? srcs.vinted
-      : ((srcs.asking.state==="ready"&&srcs.asking.isEstimate)?srcs.asking:estimate);
-    if(base){ resaleEur=base.mid; basis=base.basis; priceSource=base.priceSource; bandLow=base.low; bandHigh=base.high; }
-    else resaleEur=null;
+    const order = [srcs.sold, srcs.asking, srcs.vinted].filter(trusted);
+    const base = order[0] || ((srcs.asking.state==="ready"&&srcs.asking.isEstimate)?srcs.asking:estimate);
+    // Part A: when the driver came from a BROADENED query AND its spread is "varied", it's a loose
+    // match — price off the LOWER of it and the next trustworthy source, and flag it.
+    let broadCautious=false;
+    if(base){
+      resaleEur=base.mid; basis=base.basis; priceSource=base.priceSource; bandLow=base.low; bandHigh=base.high;
+      const broadVaried = !base.isEstimate && base.queryLevel && base.queryLevel!=="full" && base.queryLevel!=="image" && !base.tight;
+      if(broadVaried){
+        broadCautious=true;
+        const next = order[1];
+        if(next && next.mid!=null) resaleEur = Math.min(base.mid, next.mid);
+      }
+    } else resaleEur=null;
     const dn=el.querySelector(".drivernote"), dis=el.querySelector(".disagree"), vl=el.querySelector(".vintedline");
-    if(base){ const u=base.key==="sold"?"sales":base.key==="vinted"?"listings":"comps"; dn.textContent=base.isEstimate?"Priced off the AI estimate — no solid comps yet":`Priced off ${base.label}${base.count?` · ${base.count} ${u}`:""}`; dn.style.display="block"; }
+    if(base){ const u=base.key==="sold"?"sales":base.key==="vinted"?"listings":"comps"; let t=base.isEstimate?"Priced off the AI estimate — no solid comps yet":`Priced off ${base.label}${base.count?` · ${base.countLabel||base.count} ${u}`:""}`; if(broadCautious) t+=" · Broad match — priced cautiously"; dn.textContent=t; dn.style.display="block"; }
     else dn.style.display="none";
     // disagreement among TRUSTED sources — informational only, doesn't move the driver
     const ts=[srcs.sold,srcs.asking,srcs.vinted].filter(trusted).map(s=>s.mid);

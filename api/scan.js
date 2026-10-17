@@ -230,14 +230,16 @@ function cleanPrices(prices) {
   const kept = prices.filter((p) => p >= m * 0.4 && p <= m * 2.5);
   return kept.length >= Math.max(3, Math.ceil(prices.length * 0.5)) ? kept : prices;
 }
-function summarise(items, ccy, market, used, matched, branded) {
+function summarise(items, ccy, market, used, matched, branded, level) {
   if (!items.length) return { source: matched === "image" ? "eBay image match" : "eBay active listings (asking)", visual: matched === "image", marketplace: market, query: used, count: 0, currency: ccy, reliable: false, confidence: "low", tight: false, low: null, anchor: null, median: null, high: null, examples: [] };
   let prices = items.map((i) => parseFloat(i.price.value)).sort((a, b) => a - b);
   const rawCount = prices.length;
   if (!branded) prices = cleanPrices(prices);
   const low = pct(prices, 10), median = pct(prices, 50), high = pct(prices, 90);
   // branded: price off the lower third (p30); generic: median of the cleaned set.
-  const anchor = branded ? pct(prices, 30) : median;
+  // Part A: a GENERIC item priced off a BROADENED query is a loose match — anchor on p40, not the median.
+  const broadened = !!level && level !== "full" && level !== "image";
+  const anchor = branded ? pct(prices, 30) : (broadened ? pct(prices, 40) : median);
   // Which comps to SHOW (up to 6, every one a tappable link):
   //  - image match: eBay already ranks by VISUAL similarity, so keep that order (most
   //    similar first) — just skip wild price outliers so a freak listing doesn't headline.
@@ -264,7 +266,7 @@ async function getComps(levels, imageB64, branded) {
   const market = process.env.EBAY_MARKETPLACE || "EBAY_GB";
   const ccy = MARKET_CCY[market] || "GBP";
   const token = await ebayAuth();
-  const imageResult = () => { const s = summarise(imageItems, ccy, market, "(image match)", "image", branded); s.queryLevel = "image"; return s; };
+  const imageResult = () => { const s = summarise(imageItems, ccy, market, "(image match)", "image", branded, "image"); s.queryLevel = "image"; return s; };
 
   // 1) Image search first — matches on how it actually LOOKS, not words.
   let imageItems = [];
@@ -285,7 +287,7 @@ async function getComps(levels, imageB64, branded) {
   if ((!best || best.length === 0) && imageItems.length) return imageResult();
   if (!best) return null;
   if (imageItems.length > best.length) return imageResult();
-  const s = summarise(best, ccy, market, bestQ, "keyword", branded);
+  const s = summarise(best, ccy, market, bestQ, "keyword", branded, bestLevel);
   s.queryLevel = bestLevel;
   return s;
 }

@@ -119,7 +119,9 @@ export default async function handler(req, res) {
     const rawCount = prices.length;
     if (!branded) prices = cleanPrices(prices);
     const low = pct(prices, 10), median = pct(prices, 50), high = pct(prices, 90);
-    const anchor = branded ? pct(prices, 30) : median;  // branded: lower-third; generic: cleaned median
+    // branded: lower-third (p30); generic: cleaned median — but a generic item on a BROADENED query is a loose match, so anchor on p40.
+    const broadened = usedLevel !== "full" && usedLevel !== "image";
+    const anchor = branded ? pct(prices, 30) : (broadened ? pct(prices, 40) : median);
     const { tight, confidence } = gradeComps(prices.length, low, median, high);
     // Examples: the 6 priced closest to the anchor (no visual signal from Vinted).
     const examples = [...rows]

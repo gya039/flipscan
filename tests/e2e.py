@@ -212,21 +212,35 @@ def mid_eur(raw, use="anchor"):
     v = raw.get("median") if use == "median" else (raw.get("anchor") if raw.get("anchor") is not None else raw.get("median"))
     return eur(v, cur)
 
+def _sold_tight(sold):
+    c = sold.get("count") or 0
+    lo, hi, md = sold.get("low"), sold.get("high"), sold.get("median")
+    return bool(c >= 8 and lo is not None and hi is not None and md and (hi - lo) <= md * 1.5)
+
+def _broadened(level): return bool(level) and level not in ("full", "image")
+
 def compute_driver(comps, sold, vinted, estimate_mid):
     # Decision 1: pure PRIORITY — eBay sold(>=5) -> eBay asking(>=8) -> Vinted(>=8 IE) -> AI.
-    # Disagreement is INFO-only and does NOT move the driver.
-    sold_ok = bool(sold and (sold.get("count") or 0) >= 5 and mid_eur(sold, "median") is not None)
+    # Sold mid is the ANCHOR (p40 when generic+broadened, else median), mirroring the app.
+    # Part A: if the driver came from a BROADENED query AND its spread is "varied" (not tight),
+    # price off the LOWER of it and the next trustworthy source, and flag broad_cautious.
+    sold_ok = bool(sold and (sold.get("count") or 0) >= 5 and mid_eur(sold) is not None)
     ask_ok = bool(comps and (comps.get("count") or 0) >= 8 and mid_eur(comps) is not None)
     vin_ok = bool(vinted and (vinted.get("count") or 0) >= 8 and vinted.get("country") == "ie" and mid_eur(vinted) is not None)
-    trusted = ([mid_eur(sold, "median")] if sold_ok else []) + ([mid_eur(comps)] if ask_ok else []) + ([mid_eur(vinted)] if vin_ok else [])
+    order = []
+    if sold_ok: order.append({"key": "eBay sold", "mid": mid_eur(sold), "count": sold["count"], "min": 5, "level": sold.get("queryLevel"), "tight": _sold_tight(sold)})
+    if ask_ok:  order.append({"key": "eBay asking", "mid": mid_eur(comps), "count": comps["count"], "min": 8, "level": comps.get("queryLevel"), "tight": bool(comps.get("tight"))})
+    if vin_ok:  order.append({"key": "Vinted", "mid": mid_eur(vinted), "count": vinted["count"], "min": 8, "level": vinted.get("queryLevel"), "tight": bool(vinted.get("tight"))})
+    trusted = [s["mid"] for s in order]
     dis = len(trusted) >= 2 and max(trusted) > min(trusted) * 2
-    if sold_ok:
-        return {"key": "eBay sold", "mid": mid_eur(sold, "median"), "count": sold["count"], "min": 5}, dis
-    if ask_ok:
-        return {"key": "eBay asking", "mid": mid_eur(comps), "count": comps["count"], "min": 8}, dis
-    if vin_ok:
-        return {"key": "Vinted", "mid": mid_eur(vinted), "count": vinted["count"], "min": 8}, dis
-    return {"key": "AI estimate", "mid": estimate_mid, "count": 0, "min": 0}, False
+    if not order:
+        return {"key": "AI estimate", "mid": estimate_mid, "count": 0, "min": 0, "broad_cautious": False}, False
+    base = dict(order[0]); base["broad_cautious"] = False
+    if _broadened(base["level"]) and not base["tight"]:
+        base["broad_cautious"] = True
+        if len(order) >= 2 and order[1]["mid"] is not None:
+            base["mid"] = min(base["mid"], order[1]["mid"])
+    return base, dis
 
 # ---------------- maths (mirror index.html) ----------------
 def max_buy(resale):
@@ -328,6 +342,7 @@ def main():
     ap.add_argument("--no-vinted", action="store_true")
     ap.add_argument("--no-log", action="store_true")
     ap.add_argument("--no-twice", action="store_true", help="skip the 2nd scan used for the stable-query check")
+    ap.add_argument("--sold-two-level", action="store_true", help="cap eBay sold broadening at 2 levels/photo (full, then no-colour) to save SoldComps quota")
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--only", default=None, help="only photos whose filename contains this substring")
     ap.add_argument("--base", default=None)
@@ -355,7 +370,9 @@ def main():
     scan_calls = n if args.no_twice else 2 * n
     print("PAID CALLS THIS RUN:")
     print("  /api/scan   : %d  (Anthropic — your AI credit%s)" % (scan_calls, "" if args.no_twice else "; 2x per photo for the stable-query check"))
-    print("  /api/sold   : %d request%s (SoldComps, 100/mo free; each may use up to 3 SoldComps calls if it broadens)" % (sold_calls, "" if sold_calls == 1 else "s"))
+    sold_cap = 2 if args.sold_two_level else 3
+    print("  /api/sold   : %d request%s (SoldComps, 100/mo free; up to %d SoldComps calls each if it broadens -> worst case %d)" % (
+        sold_calls, "" if sold_calls == 1 else "s", sold_cap, sold_calls * sold_cap))
     print("  /api/vinted : %d  (Apify, ~EUR0.03 each)" % vinted_calls)
     print("  /api/lens   : %d  (SerpApi, 100/mo free)" % lens_calls)
     print("  /api/web    : %d  (Google Vision, ~1000/mo free)" % web_calls)
@@ -363,7 +380,7 @@ def main():
     print("=" * 56)
     if not args.yes:
         print("DRY RUN — nothing sent. Re-run with --yes to spend the calls above.")
-        print("Flags: --no-sold  --no-vinted  --limit N  --no-log")
+        print("Flags: --no-sold  --no-vinted  --limit N  --no-log  --sold-two-level")
         sys.exit(0)
     if not SECRET:
         print("FLIPSCAN_SECRET not set in env — refusing to run. set it and retry."); sys.exit(2)
@@ -419,14 +436,18 @@ def main():
         row["asking_med_num"] = asking_med
 
         if not args.no_sold and q:
-            r = post("/api/sold", {"query": q, "queries": query_levels(idn)}); endpoint_lat["sold"].append(r["latency"])
+            sold_body = {"query": q, "queries": query_levels(idn), "branded": is_branded(idn)}
+            if args.sold_two_level:  # Part B quota cap: full query, then no-colour only (skip no-material)
+                qls = query_levels(idn)
+                sold_body["queries"] = [qls[0]] + ([qls[-1]] if len(qls) > 1 and qls[-1]["level"] != qls[0]["level"] else [])
+            r = post("/api/sold", sold_body); endpoint_lat["sold"].append(r["latency"])
             save_raw(outdir, stem + ".sold", {"query": q, "response": r["json"]})
             ch, med = validate_prices(r, "sold"); row["checks"] += ch
             row["sold_med_num"] = med
             if med: row["sold_med"] = round(med, 1)
             row["_sold_raw"] = r["json"]
             sj = r["json"]
-            print("  SOLD   q='%s' level=%s count=%s median=%s" % (q, sj.get("queryLevel"), sj.get("count"), sj.get("median")))
+            print("  SOLD   q='%s' level=%s count=%s%s median=%s anchor=%s" % (q, sj.get("queryLevel"), sj.get("count"), "+" if sj.get("capped") else "", sj.get("median"), sj.get("anchor")))
         if not args.no_vinted and q:
             r = post("/api/vinted", {"query": q, "queries": query_levels(idn), "branded": is_branded(idn)}); endpoint_lat["vinted"].append(r["latency"])
             save_raw(outdir, stem + ".vinted", {"query": q, "response": r["json"]})
@@ -453,6 +474,9 @@ def main():
             row["sold_med"], (row.get("_sold_raw") or {}).get("count"),
             row["vinted_med"], (row.get("_vinted_raw") or {}).get("count"), (row.get("_vinted_raw") or {}).get("country"), (row.get("_vinted_raw") or {}).get("queryLevel"),
             driver["key"], round(resale) if resale else "-", _dis))
+        if driver.get("broad_cautious"):
+            print("  BROAD MATCH — driver '%s' from broadened/varied query; priced cautiously off the lower source." % driver["key"])
+        row["broad_cautious"] = bool(driver.get("broad_cautious"))
         if resale:
             mb, af = max_buy(resale)
             row["max_buy"] = mb
@@ -466,7 +490,7 @@ def main():
             if driver.get("min"):  # fix #1: driver must have at least its minimum comp count
                 row["checks"].append(("driver_meets_min", (driver.get("count") or 0) >= driver["min"], "%s count %s >= %s" % (driver["key"], driver.get("count"), driver["min"])))
             tmids = [m for m in [
-                mid_eur(row.get("_sold_raw"), "median") if (row.get("_sold_raw") and (row["_sold_raw"].get("count") or 0) >= 5) else None,
+                mid_eur(row.get("_sold_raw")) if (row.get("_sold_raw") and (row["_sold_raw"].get("count") or 0) >= 5) else None,
                 mid_eur(row.get("_vinted_raw")) if (row.get("_vinted_raw") and (row["_vinted_raw"].get("count") or 0) >= 8 and row["_vinted_raw"].get("country") == "ie") else None,
                 mid_eur(comps) if (comps and (comps.get("count") or 0) >= 8) else None,
             ] if m]

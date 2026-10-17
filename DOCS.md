@@ -397,6 +397,20 @@ On a comps failure it is `{ error: "comps_failed" }`; with no eBay keys it is `n
      because its colour-less query missed the "yellow quilted bomber" sales.)
   2. Bumped the Vinted Upstash cache key to `v2:` so broadening is actually exercised (old
      pre-broaden entries are no longer served).
+- **v2.4** — **Broad-match caution (one commit):** a price built off a broadened query is a
+  looser signal, so the app now treats it with care.
+  1. **Price off the lower.** When the driving source came from a **broadened** query (not
+     `full`) **and** its spread is **"varied"** (not tight), Max Buy is based on the **lower**
+     of that source and the next trustworthy source, and a **"Broad match — priced cautiously"**
+     tag appears on the driver line.
+  2. **p40 anchor for broadened generics.** When the brand is unknown **and** the source came
+     from a broadened query, the anchor is the **40th percentile** instead of the median
+     (applied across eBay asking, eBay sold, and Vinted — `scan.js`/`comps.js`/`sold.js`/`vinted.js`;
+     `sold.js` now takes `branded` and returns an `anchor`).
+  3. **"240+ sales"** — a SoldComps count at the 240 cap now shows as `240+`.
+  4. Harness: driver mirror matches (sold uses the anchor; broad+varied prices off the lower),
+     a `--sold-two-level` quota cap (full → no-colour only), and `research/test-photos/truth.csv`
+     seeded with the yellow bomber (unknown brand, quilted bomber, sold €12).
 - **v1.4** — **Outcome tracking** (deep-dive rec #4). The log now records, on save,
   `price_source` (AI / eBay asking / eBay sold / Vinted — whichever the verdict used),
   the predicted `band_low`/`band_high`, and `logged_at`. `log.html` gains per-item

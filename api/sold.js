@@ -38,6 +38,7 @@ export default async function handler(req, res) {
       ? body.queries.map((x) => ({ level: x.level || "full", q: trim(x.q) })).filter((x) => x.q)
       : (trim(body.query) ? [{ level: "full", q: trim(body.query) }] : []);
     if (!levels.length) return res.status(400).json({ error: "no_query" });
+    const branded = !!body.branded;
 
     const ccy = SITE_CCY[SITE] || "GBP";
     // NOTE: no buyingFormat filter -> include auctions AND accepted-offer sales (they're
@@ -69,15 +70,19 @@ export default async function handler(req, res) {
     }
 
     const { items, prices } = best || { items: [], prices: [] };
-    if (!prices.length) return res.status(200).json({ basis: "sold", source: "eBay sold", site: SITE, currency: ccy, count: 0, queryLevel: bestLevel, reliable: false, low: null, median: null, high: null, examples: [] });
+    if (!prices.length) return res.status(200).json({ basis: "sold", source: "eBay sold", site: SITE, currency: ccy, count: 0, queryLevel: bestLevel, reliable: false, low: null, median: null, anchor: null, high: null, examples: [] });
 
     const examples = [...items].sort((a, b) => String(b.endedAt || "").localeCompare(String(a.endedAt || ""))).slice(0, 4)
       .map((i) => ({ title: i.title, price: `${i.soldPrice} ${i.soldCurrency || ccy}`, url: i.url, image: i.thumbnailUrl || null, endedAt: i.endedAt || "" }));
 
+    const median = pct(prices, 50);
+    // Part A: a GENERIC item priced off a BROADENED query is a loose match — anchor on p40, not the median.
+    const broadened = !!bestLevel && bestLevel !== "full";
+    const anchor = (!branded && broadened) ? pct(prices, 40) : median;
     return res.status(200).json({
       basis: "sold", source: "eBay sold", site: SITE, currency: ccy,
-      count: prices.length, queryLevel: bestLevel, reliable: prices.length >= MIN,
-      low: pct(prices, 10), median: pct(prices, 50), high: pct(prices, 90), examples,
+      count: prices.length, capped: prices.length >= 240, queryLevel: bestLevel, reliable: prices.length >= MIN,
+      low: pct(prices, 10), median, anchor, high: pct(prices, 90), examples,
     });
   } catch (e) {
     console.error("sold handler", e); return res.status(500).json({ error: "server_error" });
