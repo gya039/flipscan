@@ -389,6 +389,14 @@ On a comps failure it is `{ error: "comps_failed" }`; with no eBay keys it is `n
      shown in the note + harness.
   3. Harness `sources_within_2.5x` compares **only sources meeting their minimum** (Vinted IE).
   4. **Lens** retries once on timeout before erroring.
+- **v2.3** — **eBay sold broadening + Vinted cache bump:**
+  1. `api/sold.js` now takes the same `queries` levels (full → no-material → no-colour) and
+     broadens like `comps.js`/`vinted.js` — **one SoldComps call per level, stopping at the
+     first with ≥5 sales** — and returns the `queryLevel` used (shown in the note + harness).
+     Added `maxDuration = 45` for the up-to-3 sequential calls. (Fixes photo 3 showing 0 sold
+     because its colour-less query missed the "yellow quilted bomber" sales.)
+  2. Bumped the Vinted Upstash cache key to `v2:` so broadening is actually exercised (old
+     pre-broaden entries are no longer served).
 - **v1.4** — **Outcome tracking** (deep-dive rec #4). The log now records, on save,
   `price_source` (AI / eBay asking / eBay sold / Vinted — whichever the verdict used),
   the predicted `band_low`/`band_high`, and `logged_at`. `log.html` gains per-item

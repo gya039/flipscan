@@ -89,7 +89,7 @@ export default async function handler(req, res) {
     const branded = !!body.branded;
 
     // 24h cache (per query + branded flag) to keep Apify spend down.
-    const cacheKey = "flipscan:vinted:" + (branded ? "b:" : "") + query.toLowerCase();
+    const cacheKey = "flipscan:vinted:v2:" + (branded ? "b:" : "") + query.toLowerCase();
     try { const cached = await redis(["GET", cacheKey]); if (cached) return res.status(200).json(JSON.parse(cached)); }
     catch (e) { console.error("vinted cache read", e.message); }
 

@@ -604,13 +604,13 @@ function renderCard(data, el, n, img){
         const cc=(d.country||"ie").toUpperCase();
         Object.assign(srcs.vinted,{ state:"ready", country:(d.country||"ie"), mid:d.anchor, low:d.low, high:d.high, count:d.count, confidence:d.confidence, tight:d.tight, basis:`what Vinted ${cc} sellers ask`, priceSource:"Vinted", note:`Vinted ${cc} asking prices${broadenNote(d.queryLevel)}.`, examples:compExamples(d.examples,"vinted."+(d.country||"ie")) });
       } else {
-        const r=await fetch("/api/sold",{method:"POST",headers:{"content-type":"application/json","x-flipscan-secret":getSecret()},body:JSON.stringify({query})});
+        const r=await fetch("/api/sold",{method:"POST",headers:{"content-type":"application/json","x-flipscan-secret":getSecret()},body:JSON.stringify({query, queries:queryLevels(id)})});
         if(r.status===401){ localStorage.removeItem("flipscan_secret"); throw new Error("Access code rejected — scan again to re-enter."); }
         const d=await r.json(); if(!r.ok||d.error) throw new Error(prettyErr(d.error)||"sold lookup failed");
         if(!d.count){ srcs.sold.state="empty"; srcs.sold.note="No recent eBay sales found."; renderValue(); return; }
         const ccy=d.currency, rate=RATE[ccy]||1;
         const sconf=d.count>=8 ? ((d.high!=null&&d.low!=null&&d.median>0&&(d.high-d.low)<=d.median*1.5)?"high":"medium") : (d.count>=3?"medium":"low");
-        Object.assign(srcs.sold,{ state:"ready", mid:d.median*rate, low:d.low*rate, high:d.high*rate, count:d.count, confidence:sconf, tight:sconf==="high", basis:"what it actually sold for", priceSource:"eBay sold", note:"Real eBay sold prices.", examples:compExamples(d.examples,"ebay sold") });
+        Object.assign(srcs.sold,{ state:"ready", mid:d.median*rate, low:d.low*rate, high:d.high*rate, count:d.count, confidence:sconf, tight:sconf==="high", basis:"what it actually sold for", priceSource:"eBay sold", note:`Real eBay sold prices${broadenNote(d.queryLevel)}.`, examples:compExamples(d.examples,"ebay sold") });
       }
       renderValue(); rebase();
     }catch(e){ btn.disabled=false; btn.innerHTML=label; alert(e.message); }

@@ -355,7 +355,7 @@ def main():
     scan_calls = n if args.no_twice else 2 * n
     print("PAID CALLS THIS RUN:")
     print("  /api/scan   : %d  (Anthropic — your AI credit%s)" % (scan_calls, "" if args.no_twice else "; 2x per photo for the stable-query check"))
-    print("  /api/sold   : %d  (SoldComps, 100/mo free)" % sold_calls)
+    print("  /api/sold   : %d request%s (SoldComps, 100/mo free; each may use up to 3 SoldComps calls if it broadens)" % (sold_calls, "" if sold_calls == 1 else "s"))
     print("  /api/vinted : %d  (Apify, ~EUR0.03 each)" % vinted_calls)
     print("  /api/lens   : %d  (SerpApi, 100/mo free)" % lens_calls)
     print("  /api/web    : %d  (Google Vision, ~1000/mo free)" % web_calls)
@@ -419,12 +419,14 @@ def main():
         row["asking_med_num"] = asking_med
 
         if not args.no_sold and q:
-            r = post("/api/sold", {"query": q}); endpoint_lat["sold"].append(r["latency"])
+            r = post("/api/sold", {"query": q, "queries": query_levels(idn)}); endpoint_lat["sold"].append(r["latency"])
             save_raw(outdir, stem + ".sold", {"query": q, "response": r["json"]})
             ch, med = validate_prices(r, "sold"); row["checks"] += ch
             row["sold_med_num"] = med
             if med: row["sold_med"] = round(med, 1)
             row["_sold_raw"] = r["json"]
+            sj = r["json"]
+            print("  SOLD   q='%s' level=%s count=%s median=%s" % (q, sj.get("queryLevel"), sj.get("count"), sj.get("median")))
         if not args.no_vinted and q:
             r = post("/api/vinted", {"query": q, "queries": query_levels(idn), "branded": is_branded(idn)}); endpoint_lat["vinted"].append(r["latency"])
             save_raw(outdir, stem + ".vinted", {"query": q, "response": r["json"]})
