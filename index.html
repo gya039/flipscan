@@ -199,6 +199,7 @@
   .drivernote{font-family:var(--mono);font-size:12px;color:var(--faint);letter-spacing:.04em;margin-top:16px}
   .drivernote:empty{display:none}
   .disagree{align-items:center;gap:8px;margin-top:10px;background:#2f2713;color:var(--warn);border-radius:12px;padding:10px 12px;font-size:13px;line-height:1.4}
+  .condnote{align-items:center;gap:8px;margin-top:10px;background:#2f2713;color:var(--warn);border-radius:12px;padding:10px 12px;font-size:13px;line-height:1.4}
   .paycard{margin-top:10px}
   .thinbadge{display:flex;align-items:center;gap:7px;margin-top:10px;color:var(--warn);font-size:12px}
   .vintedline{font-size:12px;color:var(--teal);margin-top:10px;line-height:1.45}
@@ -433,9 +434,14 @@ function warnMini(){return '<svg width="14" height="14" viewBox="0 0 24 24" fill
 function camMini(){return '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 8a2 2 0 0 1 2-2h2l2-2h6l2 2h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><circle cx="12" cy="13" r="4"/></svg>';}
 function compExamples(list, domain){ return (list||[]).map(ex=>({ price: ex.price||"", url: ex.url||"#", image: ex.image||null, domain })); }
 // Decision #2: ordered query levels for broadening on thin — full → no-material → no-colour.
+// Part A #1: wear grade -> multiplier on the driving price before Max Buy.
+const CONDMULT={"like new":1,"good":0.9,"fair":0.75,"poor":0.6};
+function condMult(c){ const m=CONDMULT[String(c||"").toLowerCase()]; return (m==null)?1:m; }
+// Part A #2: drop duplicate words (keep first) so overlapping fields don't repeat ("denim denim").
+function dedupeWords(s){ const seen=new Set(),out=[]; for(const w of String(s).split(/\s+/)){ if(!w) continue; const k=w.toLowerCase(); if(seen.has(k)) continue; seen.add(k); out.push(w);} return out.join(" "); }
 function queryLevels(id){
   const brand=(id.brand&&id.brand.toLowerCase()!=="unknown")?id.brand:"";
-  const j=(a)=>a.map(x=>String(x||"").trim()).filter(Boolean).join(" ").replace(/\s+/g," ").slice(0,80);
+  const j=(a)=>dedupeWords(a.map(x=>String(x||"").trim()).filter(Boolean).join(" ").replace(/\s+/g," ")).slice(0,80);
   const full=j([brand,id.colour,id.material,id.item_type]), noMat=j([brand,id.colour,id.item_type]), noCol=j([brand,id.item_type]);
   const out=[{level:"full",q:full}];
   if(noMat&&noMat!==full) out.push({level:"no-material",q:noMat});
@@ -509,6 +515,7 @@ function renderCard(data, el, n, img){
 
   let viewed="asking";
   let resaleEur=null, basis="", cur="EUR", priceSource="AI", bandLow=null, bandHigh=null;
+  const condGrade=String(id.condition||"good").toLowerCase(), cmult=condMult(condGrade); // Part A #1
 
   let extra="";
   if(id.notes) extra += `<div class="rnote">${esc(id.notes)}</div>`;
@@ -527,7 +534,7 @@ function renderCard(data, el, n, img){
       </div>
     </div>
     ${extra}
-    <div class="drivernote"></div><div class="disagree" style="display:none"></div><div class="vintedline" style="display:none"></div>
+    <div class="drivernote"></div><div class="condnote" style="display:none"></div><div class="disagree" style="display:none"></div><div class="vintedline" style="display:none"></div>
     <div class="paycard"></div>
     <div class="rlabelrow"><span class="rlabel">RESALE VALUE</span><span class="rhint">tap a source</span></div>
     <div class="srctabs">
@@ -637,8 +644,11 @@ function renderCard(data, el, n, img){
         const next = order[1];
         if(next && next.mid!=null) resaleEur = Math.min(base.mid, next.mid);
       }
+      // Part A #1: knock the driving price down for visible wear before Max Buy / verdict.
+      if(resaleEur!=null && cmult<1) resaleEur = resaleEur*cmult;
     } else resaleEur=null;
-    const dn=el.querySelector(".drivernote"), dis=el.querySelector(".disagree"), vl=el.querySelector(".vintedline");
+    const dn=el.querySelector(".drivernote"), dis=el.querySelector(".disagree"), vl=el.querySelector(".vintedline"), cn=el.querySelector(".condnote");
+    if(cn){ if(base && cmult<1){ cn.innerHTML=`${warnMini()} −${Math.round((1-cmult)*100)}% for wear · ${esc(condGrade)} condition`; cn.style.display="flex"; } else cn.style.display="none"; }
     if(base){ const u=base.key==="sold"?"sales":base.key==="vinted"?"listings":"comps"; let t=base.isEstimate?"Priced off the AI estimate — no solid comps yet":`Priced off ${base.label}${base.count?` · ${base.countLabel||base.count} ${u}`:""}`; if(broadCautious) t+=" · Broad match — priced cautiously"; dn.textContent=t; dn.style.display="block"; }
     else dn.style.display="none";
     // disagreement among TRUSTED sources — informational only, doesn't move the driver
@@ -664,7 +674,7 @@ function renderCard(data, el, n, img){
   if(id.price_tag_eur){ input.value=id.price_tag_eur; const f=el.querySelector(".tagflag"); if(f) f.style.display="inline"; updateVerdict(); }
 
   // fix #4: tap the brand / item-type to correct it — re-runs ONLY the comps (not the vision call).
-  function clientQuery(){ return [ (id.brand&&id.brand.toLowerCase()!=="unknown")?id.brand:"", id.colour, id.material, id.item_type ].map(x=>String(x||"").trim()).filter(Boolean).join(" ").replace(/\s+/g," ").slice(0,80); }
+  function clientQuery(){ return dedupeWords([ (id.brand&&id.brand.toLowerCase()!=="unknown")?id.brand:"", id.colour, id.material, id.item_type ].map(x=>String(x||"").trim()).filter(Boolean).join(" ").replace(/\s+/g," ")).slice(0,80); }
   async function reComps(){
     const dn=el.querySelector(".drivernote"); const prev=dn.textContent; dn.textContent="Re-checking comps…"; dn.style.display="block";
     try{
@@ -737,6 +747,7 @@ function renderCard(data, el, n, img){
       const record = { brand:id.brand, item_type:id.item_type, era:id.era, confidence:id.confidence, model_used:id.model_used,
         basis, price_source: priceSource, est_eur: resaleEur!=null?Math.round(resaleEur):null,
         band_low: bandLow!=null?Math.round(bandLow):null, band_high: bandHigh!=null?Math.round(bandHigh):null,
+        condition: condGrade, condition_mult: cmult,
         paid: isFinite(paid)?paid:null, logged_at: new Date().toISOString().slice(0,10), bought:true };
       const r = await fetch("/api/log",{ method:"POST", headers:{ "content-type":"application/json", "x-flipscan-secret":getSecret() }, body: JSON.stringify({ action:"save", record }) });
       if(r.status===401){ localStorage.removeItem("flipscan_secret"); throw new Error("Access code rejected — scan again to re-enter."); }

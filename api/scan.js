@@ -70,6 +70,7 @@ const IDENTITY_TOOL = {
       material: { type: "string", description: "Main material if clear, lowercase, one word, e.g. 'leather','denim','wool','nylon','cotton'. '' if unsure." },
       size: { type: "string", description: "Only if readable on the label, else 'unknown'." },
       condition_notes: { type: "string", description: "Visible flaws only (stains/holes/pilling/fading)." },
+      condition: { type: "string", enum: ["like new", "good", "fair", "poor"], description: "Overall wear grade from the photos: 'like new' (no visible wear), 'good' (light wear, no flaws), 'fair' (visible wear/light flaws), 'poor' (heavy fading, stains, holes or damage)." },
       notes: { type: "string", description: "One short, plain line like a mate would say — what makes it worth money, or what to double-check. Everyday words only; NO marketing speak (avoid 'appeals to buyers', 'nostalgia', 'sought-after', 'coveted')." },
       authenticity_flags: { type: "string", description: "Short note if anything looks fake/bootleg, else 'none'." },
       price_tag_eur: { type: ["number", "null"], description: "ONLY if a shop/charity/thrift PRICE STICKER or hand-written price tag is clearly VISIBLE on the item in the photo, the number on it, in EUR (convert from £/$ at a rough rate if needed). This is what it costs to BUY, not a size or product code. If no price tag is clearly readable, use null. Never guess a price here." },
@@ -88,17 +89,24 @@ const IDENTITY_TOOL = {
 // fix #4: build the eBay/Vinted query deterministically from structured fields — brand (if
 // known) + colour + material + item_type — so the same fields always give the same query,
 // and editing a field re-derives it. No free-text from the model.
+// Part A #2: drop duplicate words (case-insensitive, keep first) so fields that overlap don't
+// produce "denim denim" or "leather sherpa-lined leather jacket".
+function dedupeWords(s) {
+  const seen = new Set(), out = [];
+  for (const w of String(s).split(/\s+/)) { if (!w) continue; const k = w.toLowerCase(); if (seen.has(k)) continue; seen.add(k); out.push(w); }
+  return out.join(" ");
+}
 function buildQuery(id) {
   const parts = [
     (id.brand && String(id.brand).toLowerCase() !== "unknown") ? id.brand : "",
     id.colour, id.material, id.item_type,
   ].map((x) => String(x || "").trim()).filter(Boolean);
-  return parts.join(" ").replace(/\s+/g, " ").slice(0, 80);
+  return dedupeWords(parts.join(" ").replace(/\s+/g, " ")).slice(0, 80);
 }
 // Decision #2: ordered query levels to broaden a thin search — full → drop material → drop colour.
 function buildQueryLevels(id) {
   const brand = (id.brand && String(id.brand).toLowerCase() !== "unknown") ? id.brand : "";
-  const join = (arr) => arr.map((x) => String(x || "").trim()).filter(Boolean).join(" ").replace(/\s+/g, " ").slice(0, 80);
+  const join = (arr) => dedupeWords(arr.map((x) => String(x || "").trim()).filter(Boolean).join(" ").replace(/\s+/g, " ")).slice(0, 80);
   const full = join([brand, id.colour, id.material, id.item_type]);
   const noMat = join([brand, id.colour, id.item_type]);
   const noCol = join([brand, id.item_type]);
@@ -143,6 +151,8 @@ function finaliseId(id, model) {
   const pt = Number(id.price_tag_eur);
   id.price_tag_eur = (isFinite(pt) && pt > 0 && pt < 100000) ? Math.round(pt * 100) / 100 : null; // sanitise
   id.search_query = buildQuery(id);   // fix #4: deterministic, not model free-text
+  const cond = String(id.condition || "").toLowerCase().trim();
+  id.condition = ["like new", "good", "fair", "poor"].includes(cond) ? cond : "good"; // Part A #1: default used clothing to 'good'
   id.model_used = model;
   return id;
 }

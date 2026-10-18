@@ -102,9 +102,25 @@ def query_of(idn):
         return sq
     return " ".join([x for x in [idn.get("brand"), idn.get("item_type"), idn.get("era")] if x]).strip()
 
+# Part A #1: wear grade -> multiplier on the driving price (mirror index.html).
+CONDMULT = {"like new": 1.0, "good": 0.9, "fair": 0.75, "poor": 0.6}
+def cond_mult(c):
+    m = CONDMULT.get(str(c or "").lower())
+    return 1.0 if m is None else m
+
+# Part A #2: drop duplicate words (keep first) so overlapping fields don't repeat.
+def dedupe_words(s):
+    seen, out = set(), []
+    for w in str(s).split():
+        k = w.lower()
+        if k in seen:
+            continue
+        seen.add(k); out.append(w)
+    return " ".join(out)
+
 def query_levels(idn):
     brand = idn.get("brand", "") if (idn.get("brand", "").lower() != "unknown") else ""
-    def j(a): return " ".join(x.strip() for x in a if x and x.strip())[:80]
+    def j(a): return dedupe_words(" ".join(x.strip() for x in a if x and x.strip()))[:80]
     full = j([brand, idn.get("colour", ""), idn.get("material", ""), idn.get("item_type", "")])
     noMat = j([brand, idn.get("colour", ""), idn.get("item_type", "")])
     noCol = j([brand, idn.get("item_type", "")])
@@ -304,7 +320,13 @@ def write_report(outdir, rows, endpoint_lat, log_results):
     for r in rows:
         chk = "".join('<li class="%s">%s <b>%s</b> <span class="d">%s</span></li>' % ("ok" if ok else "bad", "✓" if ok else "✗", esc(n), esc(d)) for (n, ok, d) in r["checks"])
         thumb = '<img class="th" src="%s">' % r["thumb"] if r.get("thumb") else ""
-        shot = '<img class="shot" src="shots/%s.png" onerror="this.style.display=\'none\'">' % esc(r["stem"])
+        # Result-screen shot: inline as base64 if present (self-contained report), else relative ref.
+        shot_png = os.path.join(outdir, "shots", r["stem"] + ".png")
+        if os.path.exists(shot_png):
+            with open(shot_png, "rb") as sf:
+                shot = '<img class="shot" src="data:image/png;base64,%s">' % base64.b64encode(sf.read()).decode()
+        else:
+            shot = '<img class="shot" src="shots/%s.png" onerror="this.style.display=\'none\'">' % esc(r["stem"])
         secs.append("""<section><h3>%s</h3><div class="row">%s<div class="meta">
           <div><b>%s</b> · %s · conf %s</div>
           <div class="d">asking €%s · sold €%s · vinted €%s · MaxBuy €%s · verdict %s</div>
@@ -334,6 +356,60 @@ li.bad b{color:#F06A6A}li.ok b{color:#7EF0A6}</style>
         f.write(doc)
     return p
 
+# ---------------- offline recompute (reuse a run's raw JSON, no API calls) ----------------
+def run_offline(outdir):
+    raw = os.path.join(outdir, "raw")
+    if not os.path.isdir(raw):
+        print("No raw/ dir in %s" % outdir); sys.exit(2)
+    stems = sorted(f[:-5] for f in os.listdir(raw)
+                   if f.endswith(".json") and not f.endswith(".sold.json") and not f.endswith(".vinted.json"))
+    truth = load_truth()
+    def load(name):
+        p = os.path.join(raw, name)
+        if not os.path.exists(p):
+            return None
+        with open(p, encoding="utf-8") as f:
+            return json.load(f)
+    print("=" * 64)
+    print("OFFLINE verdict recompute from %s  (%d photos, NO API calls)" % (outdir, len(stems)))
+    print("=" * 64)
+    print("%-26s %-9s %6s %5s %6s  %s" % ("photo", "driver", "resale", "MaxBuy", "+5", "verdict / +5"))
+    still_grab = []
+    for stem in stems:
+        scan = load(stem + ".json") or {}
+        idn = scan.get("identity") or {}
+        comps = scan.get("comps")
+        sold = (load(stem + ".sold.json") or {}).get("response")
+        vinted = (load(stem + ".vinted.json") or {}).get("response")
+        est = idn.get("estimated_resale_eur") or {}
+        est_mid = (((est.get("low") or 0) + (est.get("high") or 0)) / 2) or None
+        driver, _ = compute_driver(comps if comps and not comps.get("error") else None, sold, vinted, est_mid)
+        resale = driver["mid"]
+        cm = cond_mult(idn.get("condition"))
+        if resale is not None and cm < 1:
+            resale = resale * cm
+        if not resale:
+            print("%-26s %-9s   (no price)" % (stem[:26], driver["key"])); continue
+        mb, _af = max_buy(resale)
+        v, _, _ = verdict(resale, max(1.0, round(mb * 0.5)))
+        v5, _, _ = verdict(resale, mb + 5)
+        if v5 == "Grab it":
+            still_grab.append(stem)
+        tr = truth.get(stem + ".jpg") or truth.get(stem + ".jpeg") or {}
+        tflag = ""
+        if tr.get("sold_price"):
+            sp = float(tr["sold_price"])
+            for src, rawr in (("sold", sold), ("asking", comps)):
+                if rawr and (rawr.get("count") or 0) > 0 and rawr.get("low") is not None:
+                    cur = rawr.get("currency", "EUR"); lo = eur(rawr["low"], cur); hi = eur(rawr["high"], cur)
+                    if not (lo <= sp <= hi):
+                        tflag += " truth EUR%g OUT of %s band EUR%.0f-%.0f;" % (sp, src, lo, hi)
+        print("%-26s %-9s %6s %5s %6s  %s / %s%s" % (
+            stem[:26], driver["key"], round(resale), mb, mb + 5, v, v5, tflag))
+    print("-" * 64)
+    print("still 'Grab' at Max Buy + EUR5: %s" % (", ".join(s[:16] for s in still_grab) if still_grab else "none"))
+    print("(note: condition multiplier only applies to raw captured AFTER the condition field shipped)")
+
 # ---------------- main ----------------
 def main():
     ap = argparse.ArgumentParser()
@@ -344,25 +420,35 @@ def main():
     ap.add_argument("--no-twice", action="store_true", help="skip the 2nd scan used for the stable-query check")
     ap.add_argument("--sold-two-level", action="store_true", help="cap eBay sold broadening at 2 levels/photo (full, then no-colour) to save SoldComps quota")
     ap.add_argument("--limit", type=int, default=0)
-    ap.add_argument("--only", default=None, help="only photos whose filename contains this substring")
+    ap.add_argument("--only", default=None, help="only photos whose filename contains ANY of these comma-separated substrings")
+    ap.add_argument("--offline", default=None, metavar="OUTDIR", help="recompute driver/MaxBuy/verdict + verdict test from a previous run's raw/ JSON — NO API calls")
+    ap.add_argument("--lens-only", default=None, help="restrict Lens+Vision to photos whose filename contains this substring (still capped at LENS_WEB_LIMIT)")
     ap.add_argument("--base", default=None)
     args = ap.parse_args()
     global BASE
     if args.base:
         BASE = args.base
 
+    if args.offline:
+        run_offline(args.offline)
+        return
+
     if not os.path.isdir(PHOTOS):
         print("No research/test-photos/ directory. Add photos first."); sys.exit(2)
     photos = sorted(f for f in os.listdir(PHOTOS)
                     if os.path.splitext(f)[1].lower() in (".jpg", ".jpeg", ".png", ".webp", ".heic", ".heif"))
     if args.only:
-        photos = [p for p in photos if args.only.lower() in p.lower()]
+        terms = [t.strip().lower() for t in args.only.split(",") if t.strip()]
+        photos = [p for p in photos if any(t in p.lower() for t in terms)]
     if args.limit > 0:
         photos = photos[:args.limit]
     n = len(photos)
+    # Which photos get Lens+Vision (SerpApi/Vision are the scarce quotas): first N, or first N matching --lens-only.
+    lens_pool = [p for p in photos if args.lens_only.lower() in p.lower()] if args.lens_only else photos
+    lens_set = set(lens_pool[:LENS_WEB_LIMIT])
     sold_calls = 0 if args.no_sold else n
     vinted_calls = 0 if args.no_vinted else n
-    lens_calls = web_calls = min(LENS_WEB_LIMIT, n)
+    lens_calls = web_calls = len(lens_set)
 
     print("=" * 56)
     print("FlipScan E2E — target %s" % BASE)
@@ -374,7 +460,7 @@ def main():
     print("  /api/sold   : %d request%s (SoldComps, 100/mo free; up to %d SoldComps calls each if it broadens -> worst case %d)" % (
         sold_calls, "" if sold_calls == 1 else "s", sold_cap, sold_calls * sold_cap))
     print("  /api/vinted : %d  (Apify, ~EUR0.03 each)" % vinted_calls)
-    print("  /api/lens   : %d  (SerpApi, 100/mo free)" % lens_calls)
+    print("  /api/lens   : %d  (SerpApi, 100/mo free)%s" % (lens_calls, ("  -> " + ", ".join(sorted(lens_set))) if lens_set else ""))
     print("  /api/web    : %d  (Google Vision, ~1000/mo free)" % web_calls)
     print("  /api/log    : %s  (free; round-trip create+delete, nothing left behind)" % ("skipped" if args.no_log else "6 ops"))
     print("=" * 56)
@@ -396,7 +482,8 @@ def main():
         print("\n[%d/%d] %s" % (i + 1, n, fn))
         stem = os.path.splitext(fn)[0]
         img, imnote = encode_image(os.path.join(PHOTOS, fn))
-        row = {"stem": stem, "brand": "", "item_type": "", "confidence": "", "checks": [],
+        row = {"stem": stem, "brand": "", "item_type": "", "confidence": "", "checks": [], "warnings": [],
+               "source": "screenshot" if "screenshot" in fn.lower() else "photo",  # Part A #5
                "asking_med": "—", "sold_med": "—", "vinted_med": "—", "max_buy": "—", "verdict": "—",
                "asking_med_num": None, "sold_med_num": None, "vinted_med_num": None,
                "thumb": img if (img and len(img) < 1_600_000) else "", "note": imnote or ""}
@@ -459,7 +546,7 @@ def main():
             print("  VINTED q='%s' level=%s count=%s low=%s anchor=%s median=%s high=%s country=%s examples=%s" % (
                 q, vj.get("queryLevel"), vj.get("count"), vj.get("low"), vj.get("anchor"), vj.get("median"), vj.get("high"),
                 vj.get("country"), [e.get("price") for e in (vj.get("examples") or [])]))
-        if i < LENS_WEB_LIMIT:
+        if fn in lens_set:
             r = post("/api/lens", {"image": img}); endpoint_lat["lens"].append(r["latency"]); row["checks"] += validate_lensweb(r, "lens")
             r = post("/api/web", {"image": img}); endpoint_lat["web"].append(r["latency"]); row["checks"] += validate_lensweb(r, "web")
 
@@ -469,6 +556,12 @@ def main():
         driver, _dis = compute_driver(comps if comps and not comps.get("error") else None, row.get("_sold_raw"), row.get("_vinted_raw"), est_mid)
         row["driver_src"] = driver["key"]
         resale = driver["mid"]
+        # Part A #1: knock the driving price down for visible wear before Max Buy / verdict.
+        cm = cond_mult(idn.get("condition"))
+        row["cond_mult"] = cm
+        if resale is not None and cm < 1:
+            resale = resale * cm
+            print("  CONDITION grade=%s -> -%d%% (driver EUR%s -> EUR%s)" % (idn.get("condition"), round((1 - cm) * 100), round(driver["mid"]), round(resale)))
         print("  SOURCES asking=%s/%s[%s] sold=%s/%s vinted=%s/%s(%s)[%s]  DRIVER=%s EUR%s disagree=%s" % (
             row["asking_med"], (comps or {}).get("count"), (comps or {}).get("queryLevel"),
             row["sold_med"], (row.get("_sold_raw") or {}).get("count"),
@@ -487,6 +580,11 @@ def main():
             v, net, mult = verdict(resale, paid)
             row["verdict"] = "%s (paid €%s)" % (v, round(paid))
             row["checks"].append(("verdict_finite", net is not None and math.isfinite(net), "net %s" % net))
+            # Part A #4: paying €5 OVER Max Buy must NOT still read as "Grab it".
+            v5, _n5, _m5 = verdict(resale, mb + 5)
+            row["verdict_plus5"] = v5
+            row["checks"].append(("verdict_safe_at_maxbuy_plus5", v5 != "Grab it",
+                                  "paid=MaxBuy+5 (EUR%d) -> %s" % (mb + 5, v5)))
             if driver.get("min"):  # fix #1: driver must have at least its minimum comp count
                 row["checks"].append(("driver_meets_min", (driver.get("count") or 0) >= driver["min"], "%s count %s >= %s" % (driver["key"], driver.get("count"), driver["min"])))
             tmids = [m for m in [
@@ -552,18 +650,20 @@ def main():
                 detail = "%s median EUR%s identical across %d items: %s" % (src, val, len(stems), ", ".join(s[:8] for s in stems))
                 for r in rows:
                     if r["stem"] in stems:
-                        r["checks"].append(("no_dup_median_%s" % src, False, detail))
+                        r.setdefault("warnings", []).append(("dup_median_%s" % src, detail))  # Part A #3: WARNING, not a failure
 
     # results.csv
     with open(os.path.join(outdir, "results.csv"), "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
-        w.writerow(["photo", "brand", "item_type", "confidence", "asking_med_eur", "sold_med_eur", "vinted_med_eur",
-                    "max_buy_eur", "verdict", "checks_passed", "checks_failed", "failed_list", "note"])
+        w.writerow(["photo", "source", "brand", "item_type", "confidence", "asking_med_eur", "sold_med_eur", "vinted_med_eur",
+                    "max_buy_eur", "verdict", "verdict_plus5", "cond_mult", "checks_passed", "checks_failed", "failed_list", "warnings", "note"])
         for r in rows:
             passed = sum(1 for (_, ok, _) in r["checks"] if ok); fail = sum(1 for (_, ok, _) in r["checks"] if not ok)
             failed_list = "; ".join(n for (n, ok, _) in r["checks"] if not ok)
-            w.writerow([r["stem"], r["brand"], r["item_type"], r["confidence"], r["asking_med"], r["sold_med"],
-                        r["vinted_med"], r["max_buy"], r["verdict"], passed, fail, failed_list, r["note"]])
+            warns = "; ".join(n for (n, _) in r.get("warnings", []))
+            w.writerow([r["stem"], r.get("source", ""), r["brand"], r["item_type"], r["confidence"], r["asking_med"], r["sold_med"],
+                        r["vinted_med"], r["max_buy"], r["verdict"], r.get("verdict_plus5", ""), r.get("cond_mult", ""),
+                        passed, fail, failed_list, warns, r["note"]])
 
     log_results = [] if args.no_log else log_roundtrip()
     report = write_report(outdir, rows, endpoint_lat, log_results)
@@ -587,6 +687,32 @@ def main():
             anyfail = True; print("  [log] %s — %s" % (nm, d))
     if not anyfail:
         print("  none")
+
+    # Part A #3: duplicate-median (and any other) warnings — reported, not counted as failures.
+    warn_rows = [(r["stem"], nm, d) for r in rows for (nm, d) in r.get("warnings", [])]
+    print("\nWARNINGS (%d):" % len(warn_rows))
+    seen_w = set()
+    for stem, nm, d in warn_rows:
+        if (nm, d) in seen_w:
+            continue
+        seen_w.add((nm, d)); print("  [%s] %s — %s" % (stem, nm, d))
+    if not warn_rows:
+        print("  none")
+
+    # Part A #4: any photo that still reads "Grab" at paid = Max Buy + €5.
+    still_grab = [r["stem"] for r in rows if r.get("verdict_plus5") == "Grab it"]
+    print("\nVERDICT TEST (still 'Grab' at Max Buy + EUR5): %s" % (", ".join(s[:16] for s in still_grab) if still_grab else "none"))
+
+    # Part A #5: ID accuracy split by source (listing screenshots are easier than garment photos).
+    print("\nID BY SOURCE:")
+    for src in ("photo", "screenshot"):
+        grp = [r for r in rows if r.get("source") == src and r.get("brand") != ""]
+        if not grp:
+            continue
+        branded = sum(1 for r in grp if str(r.get("brand", "")).lower() not in ("", "unknown"))
+        hi = sum(1 for r in grp if r.get("confidence") == "high")
+        print("  %-10s n=%d  brand-identified=%d/%d  high-confidence=%d/%d" % (src, len(grp), branded, len(grp), hi, len(grp)))
+
     print("\nout: %s" % outdir)
     print("report: %s" % report)
 

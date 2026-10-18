@@ -397,6 +397,20 @@ On a comps failure it is `{ error: "comps_failed" }`; with no eBay keys it is `n
      because its colour-less query missed the "yellow quilted bomber" sales.)
   2. Bumped the Vinted Upstash cache key to `v2:` so broadening is actually exercised (old
      pre-broaden entries are no longer served).
+- **v2.5** — **Condition adjustment + query de-dup (one commit):**
+  1. **Condition multiplier.** The identify tool now returns a `condition` grade
+     (like new / good / fair / poor). The driving price is multiplied before Max Buy
+     (1.0 / 0.9 / 0.75 / 0.6), shown on the result as e.g. "−25% for wear · fair condition",
+     and logged (`condition`, `condition_mult`). Default used clothing = `good`.
+  2. **Query de-dup.** Overlapping fields no longer repeat words — "denim denim" →
+     "denim", "leather sherpa-lined leather jacket" → "leather sherpa-lined jacket"
+     (`dedupeWords` in scan.js + index.html; mirrored in the harness).
+  3. Harness: duplicate-median is a **warning**, not a failure; a new
+     **`verdict_safe_at_maxbuy_plus5`** check (paying €5 over Max Buy must not still read
+     "Grab"); a **`source`** tag (listing screenshot vs garment photo) with ID accuracy
+     reported per group; `--only` takes comma-separated substrings; `--offline <dir>`
+     recomputes driver/MaxBuy/verdict from a run's saved raw JSON with no API calls; and
+     result-screen shots embed as base64 so the report is self-contained.
 - **v2.4** — **Broad-match caution (one commit):** a price built off a broadened query is a
   looser signal, so the app now treats it with care.
   1. **Price off the lower.** When the driving source came from a **broadened** query (not
