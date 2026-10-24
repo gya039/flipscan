@@ -6,6 +6,8 @@
 // so we 30th-percentile anchor the same way. Searches vinted.ie first; if fewer than
 // 8 results, falls back to vinted.fr (both EUR, Vinted is pan-EU so prices compare).
 
+import { filterComps } from "../lib/relevance.js";
+
 export const maxDuration = 60; // Apify run-sync can take 20s+; raise Vercel's function ceiling
 
 const ACTOR = "epicscrapers~vinted-search-scraper";
@@ -60,7 +62,9 @@ function imgOf(it) {
 }
 
 // Run the actor for one Vinted country site, return EUR asking prices + raw rows.
-async function scrapeCountry(query, country) {
+// idMeta ({brand,itemType}) drives the relevance filter (#1) so a "Nike shirt" search
+// isn't priced off Vinted dresses that merely matched the keywords.
+async function scrapeCountry(query, country, idMeta) {
   const url = `https://api.apify.com/v2/acts/${ACTOR}/run-sync-get-dataset-items?format=json`;
   const r = await fetchT(url, {
     method: "POST",
@@ -69,9 +73,12 @@ async function scrapeCountry(query, country) {
   }, APIFY_MS);
   if (!r.ok) throw new Error(`apify ${r.status}`);
   const items = await r.json();
-  const rows = (Array.isArray(items) ? items : []).filter(
+  const raw = (Array.isArray(items) ? items : []).filter(
     (it) => it && it.price && (it.price.currency_code === "EUR" || !it.price.currency_code) && !isNaN(parseFloat(it.price.amount))
   );
+  const rel = idMeta ? filterComps(raw, (it) => it.title || it.brand_title || "", idMeta.brand, idMeta.itemType) : { kept: raw, total: raw.length, cat: null };
+  const rows = rel.kept;
+  rows.rawTotal = rel.total; rows.itemCat = rel.cat; // carried for the "kept N of M" line
   return rows;
 }
 
@@ -87,6 +94,7 @@ export default async function handler(req, res) {
     if (!raw) return res.status(400).json({ error: "no_query" });
     const query = raw.split(/\s+/).slice(0, 5).join(" "); // shorter query = more comps
     const branded = !!body.branded;
+    const idMeta = { brand: body.brand || "", itemType: body.itemType || body.item_type || "" };
 
     // 24h cache (per query + branded flag) to keep Apify spend down.
     const cacheKey = "flipscan:vinted:v2:" + (branded ? "b:" : "") + query.toLowerCase();
@@ -101,17 +109,18 @@ export default async function handler(req, res) {
     // Try each level on IE (keep the best); fall back to FR with the full query only if still thin.
     let country = "ie", rows = [], usedLevel = levels[0].level;
     for (const { level, q } of levels) {
-      try { const r = await scrapeCountry(q, "ie"); if (r.length > rows.length) { rows = r; usedLevel = level; } }
+      try { const r = await scrapeCountry(q, "ie", idMeta); if (r.length > rows.length) { rows = r; usedLevel = level; } }
       catch (e) { console.error("vinted ie", level, e.message); }
       if (rows.length >= WANT) break;
     }
     if (rows.length < WANT) {
-      try { const fr = await scrapeCountry(levels[0].q, "fr"); if (fr.length > rows.length) { rows = fr; country = "fr"; usedLevel = levels[0].level; } }
+      try { const fr = await scrapeCountry(levels[0].q, "fr", idMeta); if (fr.length > rows.length) { rows = fr; country = "fr"; usedLevel = levels[0].level; } }
       catch (e) { console.error("vinted fr", e.message); }
     }
+    const keptOf = rows.rawTotal != null ? rows.rawTotal : rows.length, itemCat = rows.itemCat || null;
 
     if (!rows.length) {
-      const empty = { source: "Vinted", country, count: 0, currency: "EUR", reliable: false, confidence: "low", tight: false, low: null, anchor: null, median: null, high: null, examples: [] };
+      const empty = { source: "Vinted", country, count: 0, keptOf, itemCat, currency: "EUR", reliable: false, confidence: "low", tight: false, low: null, anchor: null, median: null, high: null, examples: [] };
       return res.status(200).json(empty);
     }
 
@@ -130,7 +139,7 @@ export default async function handler(req, res) {
       .map((it) => ({ title: it.title || it.brand_title || "Vinted listing", price: `€${Math.round(parseFloat(it.price.amount))}`, url: it.url, image: imgOf(it), condition: it.status || "" }));
 
     const result = {
-      source: "Vinted", country, branded, queryLevel: usedLevel, count: prices.length, rawCount, dropped: rawCount - prices.length, currency: "EUR",
+      source: "Vinted", country, branded, queryLevel: usedLevel, count: prices.length, rawCount, keptOf, itemCat, dropped: rawCount - prices.length, currency: "EUR",
       reliable: prices.length >= WANT, confidence, tight,
       low, anchor, median, high, examples,
     };

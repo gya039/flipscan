@@ -2,6 +2,8 @@
 // Called by a button per result, NOT on every scan, because the free plan is only
 // 100 requests/month. One tap = one request. Returns real eBay *sold* comps.
 
+import { filterComps } from "../lib/relevance.js";
+
 export const maxDuration = 45; // Decision #2: up to 3 SoldComps calls (12s each) when broadening on thin
 
 const SITE = process.env.SOLDCOMPS_SITE || "ebay.co.uk"; // Ireland has no eBay site; .co.uk is the closest
@@ -39,6 +41,7 @@ export default async function handler(req, res) {
       : (trim(body.query) ? [{ level: "full", q: trim(body.query) }] : []);
     if (!levels.length) return res.status(400).json({ error: "no_query" });
     const branded = !!body.branded;
+    const idMeta = { brand: body.brand || "", itemType: body.itemType || body.item_type || "" };
 
     const ccy = SITE_CCY[SITE] || "GBP";
     // NOTE: no buyingFormat filter -> include auctions AND accepted-offer sales (they're
@@ -50,9 +53,12 @@ export default async function handler(req, res) {
       if (r.status === 401) { const e = new Error("auth"); e.code = 401; throw e; }
       if (!r.ok) { console.error("sold http", r.status, await r.text()); const e = new Error("http"); e.code = 502; throw e; }
       const data = await r.json();
-      const items = (data.items || []).filter((i) => i.soldPrice != null && (!i.soldCurrency || i.soldCurrency === ccy));
+      const raw = (data.items || []).filter((i) => i.soldPrice != null && (!i.soldCurrency || i.soldCurrency === ccy));
+      // Relevance #1: keep only comps whose title matches the item (brand + garment type).
+      const rel = filterComps(raw, (i) => i.title, idMeta.brand, idMeta.itemType);
+      const items = rel.kept;
       const prices = items.map((i) => parseFloat(i.soldPrice)).filter((n) => !isNaN(n)).sort((a, b) => a - b);
-      return { items, prices };
+      return { items, prices, total: raw.length, cat: rel.cat };
     }
 
     let best = null, bestLevel = null;
@@ -70,7 +76,8 @@ export default async function handler(req, res) {
     }
 
     const { items, prices } = best || { items: [], prices: [] };
-    if (!prices.length) return res.status(200).json({ basis: "sold", source: "eBay sold", site: SITE, currency: ccy, count: 0, queryLevel: bestLevel, reliable: false, low: null, median: null, anchor: null, high: null, examples: [] });
+    const keptOf = (best && best.total != null) ? best.total : 0, itemCat = best ? best.cat : null;
+    if (!prices.length) return res.status(200).json({ basis: "sold", source: "eBay sold", site: SITE, currency: ccy, count: 0, keptOf, itemCat, queryLevel: bestLevel, reliable: false, low: null, median: null, anchor: null, high: null, examples: [] });
 
     const examples = [...items].sort((a, b) => String(b.endedAt || "").localeCompare(String(a.endedAt || ""))).slice(0, 4)
       .map((i) => ({ title: i.title, price: `${i.soldPrice} ${i.soldCurrency || ccy}`, url: i.url, image: i.thumbnailUrl || null, endedAt: i.endedAt || "" }));
@@ -81,7 +88,7 @@ export default async function handler(req, res) {
     const anchor = (!branded && broadened) ? pct(prices, 40) : median;
     return res.status(200).json({
       basis: "sold", source: "eBay sold", site: SITE, currency: ccy,
-      count: prices.length, capped: prices.length >= 240, queryLevel: bestLevel, reliable: prices.length >= MIN,
+      count: prices.length, capped: prices.length >= 240, keptOf, itemCat, queryLevel: bestLevel, reliable: prices.length >= MIN,
       low: pct(prices, 10), median, anchor, high: pct(prices, 90), examples,
     });
   } catch (e) {

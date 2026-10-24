@@ -523,7 +523,8 @@ def main():
         row["asking_med_num"] = asking_med
 
         if not args.no_sold and q:
-            sold_body = {"query": q, "queries": query_levels(idn), "branded": is_branded(idn)}
+            sold_body = {"query": q, "queries": query_levels(idn), "branded": is_branded(idn),
+                         "brand": idn.get("brand", ""), "itemType": idn.get("item_type", "")}
             if args.sold_two_level:  # Part B quota cap: full query, then no-colour only (skip no-material)
                 qls = query_levels(idn)
                 sold_body["queries"] = [qls[0]] + ([qls[-1]] if len(qls) > 1 and qls[-1]["level"] != qls[0]["level"] else [])
@@ -536,7 +537,8 @@ def main():
             sj = r["json"]
             print("  SOLD   q='%s' level=%s count=%s%s median=%s anchor=%s" % (q, sj.get("queryLevel"), sj.get("count"), "+" if sj.get("capped") else "", sj.get("median"), sj.get("anchor")))
         if not args.no_vinted and q:
-            r = post("/api/vinted", {"query": q, "queries": query_levels(idn), "branded": is_branded(idn)}); endpoint_lat["vinted"].append(r["latency"])
+            r = post("/api/vinted", {"query": q, "queries": query_levels(idn), "branded": is_branded(idn),
+                                     "brand": idn.get("brand", ""), "itemType": idn.get("item_type", "")}); endpoint_lat["vinted"].append(r["latency"])
             save_raw(outdir, stem + ".vinted", {"query": q, "response": r["json"]})
             ch, med = validate_prices(r, "vinted"); row["checks"] += ch
             row["vinted_med_num"] = med
