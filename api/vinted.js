@@ -140,20 +140,20 @@ export default async function handler(req, res) {
       : [{ level: "full", q: query }];
 
     // Try each level on IE (keep the best); fall back to FR with the full query only if still thin.
-    let country = "ie", rows = [], usedLevel = levels[0].level;
+    let country = "ie", rows = [], usedLevel = levels[0].level, usedQ = levels[0].q;
     for (const { level, q } of levels) {
-      try { const r = await scrapeCountry(q, "ie", idMeta); if (r.length > rows.length) { rows = r; usedLevel = level; } }
+      try { const r = await scrapeCountry(q, "ie", idMeta); if (r.length > rows.length) { rows = r; usedLevel = level; usedQ = q; } }
       catch (e) { console.error("vinted ie", level, e.message); }
       if (rows.length >= WANT) break;
     }
     if (rows.length < WANT) {
-      try { const fr = await scrapeCountry(levels[0].q, "fr", idMeta); if (fr.length > rows.length) { rows = fr; country = "fr"; usedLevel = levels[0].level; } }
+      try { const fr = await scrapeCountry(levels[0].q, "fr", idMeta); if (fr.length > rows.length) { rows = fr; country = "fr"; usedLevel = levels[0].level; usedQ = levels[0].q; } }
       catch (e) { console.error("vinted fr", e.message); }
     }
     const keptOf = rows.rawTotal != null ? rows.rawTotal : rows.length, itemCat = rows.itemCat || null;
 
     if (!rows.length) {
-      const empty = { source: "Vinted", country, count: 0, keptOf, itemCat, currency: "EUR", reliable: false, confidence: "low", tight: false, low: null, anchor: null, median: null, high: null, examples: [] };
+      const empty = { source: "Vinted", country, query: usedQ, count: 0, keptOf, itemCat, currency: "EUR", reliable: false, confidence: "low", tight: false, low: null, anchor: null, median: null, high: null, examples: [] };
       return res.status(200).json(empty);
     }
 
@@ -172,7 +172,7 @@ export default async function handler(req, res) {
       .map((it) => ({ title: it.title || it.brand_title || "Vinted listing", price: `€${Math.round(parseFloat(it.price.amount))}`, url: it.url, image: imgOf(it), condition: it.status || "" }));
 
     const result = {
-      source: "Vinted", country, branded, queryLevel: usedLevel, count: prices.length, rawCount, keptOf, itemCat, dropped: rawCount - prices.length, currency: "EUR",
+      source: "Vinted", country, query: usedQ, branded, queryLevel: usedLevel, count: prices.length, rawCount, keptOf, itemCat, dropped: rawCount - prices.length, currency: "EUR",
       reliable: prices.length >= WANT, confidence, tight,
       low, anchor, median, high, examples,
     };

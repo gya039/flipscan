@@ -512,7 +512,10 @@ def main():
         row["model_used"] = idn.get("model_used", "")
         comps = scan["json"].get("comps") if scan["status"] == 200 else None
         q = query_of(idn)
-        print("  ID brand='%s' item='%s' conf=%s model=%s" % (idn.get("brand"), idn.get("item_type"), idn.get("confidence"), idn.get("model_used")))
+        print("  ID brand='%s' item='%s' conf=%s model=%s%s" % (idn.get("brand"), idn.get("item_type"), idn.get("confidence"), idn.get("model_used"),
+              (" club='%s' season='%s'" % (idn.get("club"), idn.get("season"))) if idn.get("club") or idn.get("season") else ""))
+        if comps and not comps.get("error"):
+            print("  ASKING %s='%s' kept=%s/%s level=%s" % ("image" if comps.get("visual") else "q", comps.get("query"), comps.get("count"), comps.get("keptOf"), comps.get("queryLevel")))
 
         # fix #4: same photo scanned twice should produce the SAME (deterministic) search_query
         if not args.no_twice:
@@ -546,7 +549,7 @@ def main():
             if med: row["sold_med"] = round(med, 1)
             row["_sold_raw"] = r["json"]
             sj = r["json"]
-            print("  SOLD   q='%s' level=%s count=%s%s median=%s anchor=%s" % (q, sj.get("queryLevel"), sj.get("count"), "+" if sj.get("capped") else "", sj.get("median"), sj.get("anchor")))
+            print("  SOLD   q='%s' level=%s kept=%s/%s count=%s%s median=%s anchor=%s" % (sj.get("query"), sj.get("queryLevel"), sj.get("count"), sj.get("keptOf"), sj.get("count"), "+" if sj.get("capped") else "", sj.get("median"), sj.get("anchor")))
         if not args.no_vinted and q:
             r = post("/api/vinted", {"query": q, "queries": query_levels(idn), "branded": is_branded(idn),
                                      "brand": idn.get("brand", ""), "itemType": idn.get("item_type", "")}); endpoint_lat["vinted"].append(r["latency"])
@@ -556,8 +559,8 @@ def main():
             if med: row["vinted_med"] = round(med, 1)
             row["_vinted_raw"] = r["json"]
             vj = r["json"]
-            print("  VINTED q='%s' level=%s count=%s low=%s anchor=%s median=%s high=%s country=%s examples=%s" % (
-                q, vj.get("queryLevel"), vj.get("count"), vj.get("low"), vj.get("anchor"), vj.get("median"), vj.get("high"),
+            print("  VINTED q='%s' level=%s kept=%s/%s count=%s anchor=%s median=%s country=%s examples=%s" % (
+                vj.get("query"), vj.get("queryLevel"), vj.get("count"), vj.get("keptOf"), vj.get("count"), vj.get("anchor"), vj.get("median"),
                 vj.get("country"), [e.get("price") for e in (vj.get("examples") or [])]))
         if fn in lens_set:
             r = post("/api/lens", {"image": img}); endpoint_lat["lens"].append(r["latency"]); row["checks"] += validate_lensweb(r, "lens")

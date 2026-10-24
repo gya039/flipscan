@@ -61,12 +61,12 @@ export default async function handler(req, res) {
       return { items, prices, total: raw.length, cat: rel.cat };
     }
 
-    let best = null, bestLevel = null;
+    let best = null, bestLevel = null, bestQ = "";
     try {
       for (const { level, q } of levels) {
         const got = await soldSearch(q);
-        if (!best || got.prices.length > best.prices.length) { best = got; bestLevel = level; }
-        if (got.prices.length >= MIN) { best = got; bestLevel = level; break; }
+        if (!best || got.prices.length > best.prices.length) { best = got; bestLevel = level; bestQ = q; }
+        if (got.prices.length >= MIN) { best = got; bestLevel = level; bestQ = q; break; }
       }
     } catch (e) {
       if (e.code === 429) return res.status(429).json({ error: "sold_quota" });
@@ -77,7 +77,7 @@ export default async function handler(req, res) {
 
     const { items, prices } = best || { items: [], prices: [] };
     const keptOf = (best && best.total != null) ? best.total : 0, itemCat = best ? best.cat : null;
-    if (!prices.length) return res.status(200).json({ basis: "sold", source: "eBay sold", site: SITE, currency: ccy, count: 0, keptOf, itemCat, queryLevel: bestLevel, reliable: false, low: null, median: null, anchor: null, high: null, examples: [] });
+    if (!prices.length) return res.status(200).json({ basis: "sold", source: "eBay sold", site: SITE, currency: ccy, query: bestQ, count: 0, keptOf, itemCat, queryLevel: bestLevel, reliable: false, low: null, median: null, anchor: null, high: null, examples: [] });
 
     const examples = [...items].sort((a, b) => String(b.endedAt || "").localeCompare(String(a.endedAt || ""))).slice(0, 4)
       .map((i) => ({ title: i.title, price: `${i.soldPrice} ${i.soldCurrency || ccy}`, url: i.url, image: i.thumbnailUrl || null, endedAt: i.endedAt || "" }));
@@ -87,7 +87,7 @@ export default async function handler(req, res) {
     const broadened = !!bestLevel && bestLevel !== "full";
     const anchor = (!branded && broadened) ? pct(prices, 40) : median;
     return res.status(200).json({
-      basis: "sold", source: "eBay sold", site: SITE, currency: ccy,
+      basis: "sold", source: "eBay sold", site: SITE, currency: ccy, query: bestQ,
       count: prices.length, capped: prices.length >= 240, keptOf, itemCat, queryLevel: bestLevel, reliable: prices.length >= MIN,
       low: pct(prices, 10), median, anchor, high: pct(prices, 90), examples,
     });

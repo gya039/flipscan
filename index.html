@@ -203,6 +203,7 @@
   .condnote .condgrade{cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px}
   .condnote .condtap{color:var(--faint);font-size:11px;margin-left:4px}
   .condnote .condreason{color:var(--muted);font-size:12px;margin-top:3px;font-style:italic}
+  .whycomps{margin-top:6px;font-family:var(--mono);font-size:11px;color:var(--faint);letter-spacing:.02em}
   .paycard{margin-top:10px}
   .thinbadge{display:flex;align-items:center;gap:7px;margin-top:10px;color:var(--warn);font-size:12px}
   .vintedline{font-size:12px;color:var(--teal);margin-top:10px;line-height:1.45}
@@ -466,6 +467,7 @@ function srcFromComps(id, c){
     const rate=RATE[c.currency]||1;
     return { key:"asking", label:"eBay asking", accent:"var(--accent)", fill:"#7A8A2E", state:"ready",
       mid:c.anchor*rate, low:c.low*rate, high:c.high*rate, count:c.count, confidence:c.confidence, tight:c.tight, queryLevel:c.queryLevel,
+      queryUsed:c.query, keptOf:c.keptOf, visual:c.visual,
       basis:"what they're asking", priceSource:"eBay asking",
       note:(c.visual?"Visually-matched eBay listings":"eBay asking prices")+broadenNote(c.queryLevel)+".",
       examples: compExamples(c.examples,"ebay.co.uk") };
@@ -494,6 +496,13 @@ function compCardsHtml(list){
   if(!list||!list.length) return "";
   return `<div class="compscroll">`+list.map(ex=>`<a class="compcard" href="${esc(ex.url)}" target="_blank" rel="noopener"><div class="ph"${ex.image?` style="background-image:url('${esc(ex.image)}')"`:""}></div><div class="cp">${esc(ex.price||"")}</div><div class="cd">${esc(ex.domain||"")}</div></a>`).join("")+`</div>`;
 }
+// #4: show exactly what was searched and how many comps actually matched the item.
+function whyComps(s){
+  if(s.isEstimate || s.keptOf==null) return "";
+  const what = s.visual ? "image match" : (s.queryUsed ? `“${esc(s.queryUsed)}”` : "");
+  if(!what) return "";
+  return `<div class="whycomps">${what} · kept ${s.count} of ${s.keptOf}</div>`;
+}
 function valueCardHtml(s){
   if(s.state==="unfetched") return `<div class="vfetchnote">${esc(s.fetchNote)}</div><button class="vfetchbtn" data-src="${s.key}">${esc(s.fetchLabel)}<small>${esc(s.fetchQuota)}</small></button>`;
   if(s.state==="empty"||s.mid==null) return `<div class="vempty">${esc(s.note||"No data for this source.")}</div>`;
@@ -501,7 +510,7 @@ function valueCardHtml(s){
   return `<div class="vtop"><div class="vmid" style="color:${s.accent}">${fmt(s.mid,"EUR")}</div>${confChipHtml(s)}</div>
     <div class="rangebar"><div class="track"></div><div class="rfill" style="background:${s.fill}"></div><div class="rmark" style="left:${mk}%;background:${s.accent}"></div></div>
     <div class="rlabels"><span>${fmt(s.low,"EUR")}</span><span>most sit here</span><span>${fmt(s.high,"EUR")}</span></div>
-    <div class="vnote">${esc(s.note)}</div>${compCardsHtml(s.examples)}`;
+    <div class="vnote">${esc(s.note)}</div>${whyComps(s)}${compCardsHtml(s.examples)}`;
 }
 
 function renderCard(data, el, n, img){
@@ -621,7 +630,7 @@ function renderCard(data, el, n, img){
         const d=await r.json(); if(!r.ok||d.error) throw new Error(prettyErr(d.error)||"Vinted lookup failed");
         if(!d.count){ srcs.vinted.state="empty"; srcs.vinted.note="No Vinted listings found."; renderValue(); return; }
         const cc=(d.country||"ie").toUpperCase();
-        Object.assign(srcs.vinted,{ state:"ready", country:(d.country||"ie"), mid:d.anchor, low:d.low, high:d.high, count:d.count, confidence:d.confidence, tight:d.tight, queryLevel:d.queryLevel, basis:`what Vinted ${cc} sellers ask`, priceSource:"Vinted", note:`Vinted ${cc} asking prices${broadenNote(d.queryLevel)}.`, examples:compExamples(d.examples,"vinted."+(d.country||"ie")) });
+        Object.assign(srcs.vinted,{ state:"ready", country:(d.country||"ie"), mid:d.anchor, low:d.low, high:d.high, count:d.count, confidence:d.confidence, tight:d.tight, queryLevel:d.queryLevel, queryUsed:d.query, keptOf:d.keptOf, basis:`what Vinted ${cc} sellers ask`, priceSource:"Vinted", note:`Vinted ${cc} asking prices${broadenNote(d.queryLevel)}.`, examples:compExamples(d.examples,"vinted."+(d.country||"ie")) });
       } else {
         const r=await fetch("/api/sold",{method:"POST",headers:{"content-type":"application/json","x-flipscan-secret":getSecret()},body:JSON.stringify({query, queries:queryLevels(id), branded:!!(id.brand&&id.brand.toLowerCase()!=="unknown"), brand:id.brand, itemType:id.item_type})});
         if(r.status===401){ localStorage.removeItem("flipscan_secret"); throw new Error("Access code rejected — scan again to re-enter."); }
@@ -629,7 +638,7 @@ function renderCard(data, el, n, img){
         if(!d.count){ srcs.sold.state="empty"; srcs.sold.note="No recent eBay sales found."; renderValue(); return; }
         const ccy=d.currency, rate=RATE[ccy]||1;
         const sconf=d.count>=8 ? ((d.high!=null&&d.low!=null&&d.median>0&&(d.high-d.low)<=d.median*1.5)?"high":"medium") : (d.count>=3?"medium":"low");
-        Object.assign(srcs.sold,{ state:"ready", mid:(d.anchor!=null?d.anchor:d.median)*rate, low:d.low*rate, high:d.high*rate, count:d.count, countLabel:(d.capped?d.count+"+":null), confidence:sconf, tight:sconf==="high", queryLevel:d.queryLevel, basis:"what it actually sold for", priceSource:"eBay sold", note:`Real eBay sold prices${broadenNote(d.queryLevel)}.`, examples:compExamples(d.examples,"ebay sold") });
+        Object.assign(srcs.sold,{ state:"ready", mid:(d.anchor!=null?d.anchor:d.median)*rate, low:d.low*rate, high:d.high*rate, count:d.count, countLabel:(d.capped?d.count+"+":null), confidence:sconf, tight:sconf==="high", queryLevel:d.queryLevel, queryUsed:d.query, keptOf:d.keptOf, basis:"what it actually sold for", priceSource:"eBay sold", note:`Real eBay sold prices${broadenNote(d.queryLevel)}.`, examples:compExamples(d.examples,"ebay sold") });
       }
       renderValue(); rebase();
     }catch(e){ btn.disabled=false; btn.innerHTML=label; alert(e.message); }
