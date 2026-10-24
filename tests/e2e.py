@@ -118,9 +118,20 @@ def dedupe_words(s):
         seen.add(k); out.append(w)
     return " ".join(out)
 
+def is_football_type(t):
+    return bool(re.search(r"\b(football|soccer|jersey|kit)\b", str(t or ""), re.I))
+
 def query_levels(idn):
     brand = idn.get("brand", "") if (idn.get("brand", "").lower() != "unknown") else ""
     def j(a): return dedupe_words(" ".join(x.strip() for x in a if x and x.strip()))[:80]
+    if is_football_type(idn.get("item_type")) and (idn.get("club") or idn.get("season")):  # #3
+        full = j([idn.get("club", ""), idn.get("season", ""), idn.get("home_away", ""), brand, "football shirt"])
+        noSeason = j([idn.get("club", ""), brand, "football shirt"])
+        noClub = j([brand, "football shirt"])
+        out = [{"level": "full", "q": full}]
+        if noSeason and noSeason != full: out.append({"level": "no-season", "q": noSeason})
+        if noClub and noClub != noSeason and noClub != full: out.append({"level": "no-club", "q": noClub})
+        return out
     full = j([brand, idn.get("colour", ""), idn.get("material", ""), idn.get("item_type", "")])
     noMat = j([brand, idn.get("colour", ""), idn.get("item_type", "")])
     noCol = j([brand, idn.get("item_type", "")])

@@ -3,7 +3,7 @@
 //       -> (optional) filtered eBay comps -> one JSON response { identity, comps }.
 // A comps failure never fails the whole scan. Secrets stay server-side.
 
-import { filterComps } from "../lib/relevance.js";
+import { filterComps, classify } from "../lib/relevance.js";
 
 const MODEL = "claude-haiku-4-5-20251001";
 // fix #5: re-run a LOW-confidence identification once on a stronger model. Override the id via
@@ -71,6 +71,10 @@ const IDENTITY_TOOL = {
       colour: { type: "string", description: "Main colour(s), lowercase, 1-3 words, e.g. 'black','mustard yellow','navy'. '' if unclear." },
       material: { type: "string", description: "Main material if clear, lowercase, one word, e.g. 'leather','denim','wool','nylon','cotton'. '' if unsure." },
       size: { type: "string", description: "Only if readable on the label, else 'unknown'." },
+      club: { type: "string", description: "FOOTBALL/SPORTS SHIRTS ONLY: the team/club from the crest, sponsor or badge (e.g. 'Celtic', 'Brazil'), or '' if you can't read the crest. Don't guess." },
+      season: { type: "string", description: "FOOTBALL/SPORTS SHIRTS ONLY: the season if datable from sponsor/kit maker/design, e.g. '2004-05', else ''." },
+      home_away: { type: "string", description: "FOOTBALL/SPORTS SHIRTS ONLY: 'home', 'away', 'third', 'goalkeeper' or '' if unclear." },
+      player: { type: "string", description: "FOOTBALL/SPORTS SHIRTS ONLY: player name/number printed on the back, else ''." },
       condition_notes: { type: "string", description: "Visible flaws only (stains/holes/pilling/fading)." },
       condition: { type: "string", enum: ["like new", "good", "fair", "poor"], description: "Overall wear grade from the photos. 'like new' = no visible wear. 'good' = minimal wear, no flaws. 'fair' = LIGHT wear only (slight creasing, minor bobbling). 'poor' = ANY heavy fading, pilling, stains, holes or visible damage — if you can see fading/pilling/stains/holes/damage, grade it 'poor', not 'fair'." },
       condition_reason: { type: "string", description: "One short plain line explaining the condition grade from what's visible, e.g. 'heavy fading across the front' or 'clean, only light creasing'. Everyday words." },
@@ -99,20 +103,30 @@ function dedupeWords(s) {
   for (const w of String(s).split(/\s+/)) { if (!w) continue; const k = w.toLowerCase(); if (seen.has(k)) continue; seen.add(k); out.push(w); }
   return out.join(" ");
 }
+const brandOf = (id) => (id.brand && String(id.brand).toLowerCase() !== "unknown") ? id.brand : "";
+const isFootball = (id) => { const c = classify(id.item_type); return c && c.id === "football_shirt"; };
+const jq = (arr) => dedupeWords(arr.map((x) => String(x || "").trim()).filter(Boolean).join(" ").replace(/\s+/g, " ")).slice(0, 80);
+
 function buildQuery(id) {
-  const parts = [
-    (id.brand && String(id.brand).toLowerCase() !== "unknown") ? id.brand : "",
-    id.colour, id.material, id.item_type,
-  ].map((x) => String(x || "").trim()).filter(Boolean);
-  return dedupeWords(parts.join(" ").replace(/\s+/g, " ")).slice(0, 80);
+  // #3: football/sports shirts search best on CLUB + SEASON + BRAND, not colour/material.
+  if (isFootball(id) && (id.club || id.season)) return jq([id.club, id.season, id.home_away, brandOf(id), "football shirt"]);
+  return jq([brandOf(id), id.colour, id.material, id.item_type]);
 }
 // Decision #2: ordered query levels to broaden a thin search — full → drop material → drop colour.
+// #3: for football shirts, broaden club+season+brand → club+brand → brand instead.
 function buildQueryLevels(id) {
-  const brand = (id.brand && String(id.brand).toLowerCase() !== "unknown") ? id.brand : "";
-  const join = (arr) => dedupeWords(arr.map((x) => String(x || "").trim()).filter(Boolean).join(" ").replace(/\s+/g, " ")).slice(0, 80);
-  const full = join([brand, id.colour, id.material, id.item_type]);
-  const noMat = join([brand, id.colour, id.item_type]);
-  const noCol = join([brand, id.item_type]);
+  const brand = brandOf(id);
+  if (isFootball(id) && (id.club || id.season)) {
+    const out = [{ level: "full", q: jq([id.club, id.season, id.home_away, brand, "football shirt"]) }];
+    const noSeason = jq([id.club, brand, "football shirt"]);
+    const noClub = jq([brand, "football shirt"]);
+    if (noSeason && noSeason !== out[0].q) out.push({ level: "no-season", q: noSeason });
+    if (noClub && noClub !== noSeason && noClub !== out[0].q) out.push({ level: "no-club", q: noClub });
+    return out;
+  }
+  const full = jq([brand, id.colour, id.material, id.item_type]);
+  const noMat = jq([brand, id.colour, id.item_type]);
+  const noCol = jq([brand, id.item_type]);
   const out = [{ level: "full", q: full }];
   if (noMat && noMat !== full) out.push({ level: "no-material", q: noMat });
   if (noCol && noCol !== noMat && noCol !== full) out.push({ level: "no-colour", q: noCol });
@@ -157,6 +171,12 @@ function finaliseId(id, model) {
   const cond = String(id.condition || "").toLowerCase().trim();
   id.condition = ["like new", "good", "fair", "poor"].includes(cond) ? cond : "good"; // Part A #1: default used clothing to 'good'
   id.condition_reason = String(id.condition_reason || "").trim().slice(0, 120);
+  // #3: football shirt with no readable crest — flag it and don't claim high confidence.
+  for (const k of ["club", "season", "home_away", "player"]) id[k] = String(id[k] || "").trim();
+  if (isFootball(id) && !id.club) {
+    id.notes = ("club unknown, check crest. " + (id.notes || "")).trim().slice(0, 200);
+    if (String(id.confidence || "").toLowerCase() === "high") id.confidence = "medium";
+  }
   id.model_used = model;
   return id;
 }

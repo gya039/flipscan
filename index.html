@@ -442,9 +442,17 @@ const CONDMULT={"like new":1,"good":0.9,"fair":0.75,"poor":0.6};
 function condMult(c){ const m=CONDMULT[String(c||"").toLowerCase()]; return (m==null)?1:m; }
 // Part A #2: drop duplicate words (keep first) so overlapping fields don't repeat ("denim denim").
 function dedupeWords(s){ const seen=new Set(),out=[]; for(const w of String(s).split(/\s+/)){ if(!w) continue; const k=w.toLowerCase(); if(seen.has(k)) continue; seen.add(k); out.push(w);} return out.join(" "); }
+function isFootballType(t){ return /\b(football|soccer|jersey|kit)\b/i.test(String(t||"")); } // #3
 function queryLevels(id){
   const brand=(id.brand&&id.brand.toLowerCase()!=="unknown")?id.brand:"";
   const j=(a)=>dedupeWords(a.map(x=>String(x||"").trim()).filter(Boolean).join(" ").replace(/\s+/g," ")).slice(0,80);
+  if(isFootballType(id.item_type) && (id.club||id.season)){ // #3: club+season+brand first
+    const full=j([id.club,id.season,id.home_away,brand,"football shirt"]), noSeason=j([id.club,brand,"football shirt"]), noClub=j([brand,"football shirt"]);
+    const out=[{level:"full",q:full}];
+    if(noSeason&&noSeason!==full) out.push({level:"no-season",q:noSeason});
+    if(noClub&&noClub!==noSeason&&noClub!==full) out.push({level:"no-club",q:noClub});
+    return out;
+  }
   const full=j([brand,id.colour,id.material,id.item_type]), noMat=j([brand,id.colour,id.item_type]), noCol=j([brand,id.item_type]);
   const out=[{level:"full",q:full}];
   if(noMat&&noMat!==full) out.push({level:"no-material",q:noMat});
@@ -686,7 +694,11 @@ function renderCard(data, el, n, img){
   if(id.price_tag_eur){ input.value=id.price_tag_eur; const f=el.querySelector(".tagflag"); if(f) f.style.display="inline"; updateVerdict(); }
 
   // fix #4: tap the brand / item-type to correct it — re-runs ONLY the comps (not the vision call).
-  function clientQuery(){ return dedupeWords([ (id.brand&&id.brand.toLowerCase()!=="unknown")?id.brand:"", id.colour, id.material, id.item_type ].map(x=>String(x||"").trim()).filter(Boolean).join(" ").replace(/\s+/g," ")).slice(0,80); }
+  function clientQuery(){
+    const brand=(id.brand&&id.brand.toLowerCase()!=="unknown")?id.brand:"";
+    const parts = (isFootballType(id.item_type) && (id.club||id.season)) ? [id.club,id.season,id.home_away,brand,"football shirt"] : [brand, id.colour, id.material, id.item_type];
+    return dedupeWords(parts.map(x=>String(x||"").trim()).filter(Boolean).join(" ").replace(/\s+/g," ")).slice(0,80);
+  }
   async function reComps(){
     const dn=el.querySelector(".drivernote"); const prev=dn.textContent; dn.textContent="Re-checking comps…"; dn.style.display="block";
     try{
