@@ -6,7 +6,7 @@
 // so we 30th-percentile anchor the same way. Searches vinted.ie first; if fewer than
 // 8 results, falls back to vinted.fr (both EUR, Vinted is pan-EU so prices compare).
 
-import { filterComps } from "../lib/relevance.js";
+import { filterComps, classify } from "../lib/relevance.js";
 
 export const maxDuration = 60; // Apify run-sync can take 20s+; raise Vercel's function ceiling
 
@@ -14,6 +14,33 @@ const ACTOR = "epicscrapers~vinted-search-scraper";
 const WANT = 8;           // enough IE results to not bother falling back to FR
 const CACHE_TTL = 86400;  // 24h
 const APIFY_MS = 24000;   // per-country Apify timeout
+
+// #2: Vinted's brand / catalog filters live in the search URL (the actor has no input
+// field for them). Supply the numeric ids via env as JSON — read them straight off a
+// filtered Vinted URL (apply the filter on Vinted, copy ?catalog[]=.. / &brand_ids[]=..).
+// Keyed by our relevance category id (see lib/relevance.js) and by lowercased brand.
+//   VINTED_CATALOG_IDS = {"football_shirt":"2050","jeans":"257", ...}
+//   VINTED_BRAND_IDS   = {"nike":"53","adidas":"14", ...}
+function parseEnvMap(name) {
+  try { const v = process.env[name]; return v ? JSON.parse(v) : {}; } catch { return {}; }
+}
+const CATALOG_IDS = parseEnvMap("VINTED_CATALOG_IDS");
+const BRAND_IDS = parseEnvMap("VINTED_BRAND_IDS");
+function domainFor(cc) { return cc === "fr" ? "www.vinted.fr" : "www.vinted.ie"; }
+// Build a Vinted catalog URL with search_text + ordered results, plus catalog[] / brand_ids[]
+// whenever we have an id for this garment category / brand. Returns null if nothing to target.
+function catalogUrl(query, cc, cat, brand) {
+  const catId = cat && CATALOG_IDS[cat];
+  const brandId = brand && BRAND_IDS[String(brand).toLowerCase()];
+  if (!catId && !brandId) return null; // no verified ids -> fall back to keyword search
+  const p = new URLSearchParams();
+  p.set("search_text", query);
+  p.set("order", "newest_first");
+  let u = `https://${domainFor(cc)}/catalog?${p.toString()}`;
+  if (catId) u += `&catalog[]=${encodeURIComponent(catId)}`;
+  if (brandId) u += `&brand_ids[]=${encodeURIComponent(brandId)}`;
+  return u;
+}
 
 async function readJson(req) {
   if (req.body) return typeof req.body === "string" ? JSON.parse(req.body) : req.body;
@@ -66,10 +93,15 @@ function imgOf(it) {
 // isn't priced off Vinted dresses that merely matched the keywords.
 async function scrapeCountry(query, country, idMeta) {
   const url = `https://api.apify.com/v2/acts/${ACTOR}/run-sync-get-dataset-items?format=json`;
+  // #2: prefer a catalog/brand-filtered Vinted URL when we have the ids; else keyword search.
+  const catUrl = catalogUrl(query, country, idMeta && idMeta.cat, idMeta && idMeta.brand);
+  const input = catUrl
+    ? { startUrls: [{ url: catUrl }], maxProducts: 20 }
+    : { keywords: [query], country, maxProducts: 20 };
   const r = await fetchT(url, {
     method: "POST",
     headers: { Authorization: `Bearer ${process.env.APIFY_TOKEN}`, "content-type": "application/json" },
-    body: JSON.stringify({ keywords: [query], country, maxProducts: 20 }),
+    body: JSON.stringify(input),
   }, APIFY_MS);
   if (!r.ok) throw new Error(`apify ${r.status}`);
   const items = await r.json();
@@ -95,9 +127,10 @@ export default async function handler(req, res) {
     const query = raw.split(/\s+/).slice(0, 5).join(" "); // shorter query = more comps
     const branded = !!body.branded;
     const idMeta = { brand: body.brand || "", itemType: body.itemType || body.item_type || "" };
+    idMeta.cat = (classify(idMeta.itemType) || {}).id || null; // for the catalog[] filter (#2)
 
     // 24h cache (per query + branded flag) to keep Apify spend down.
-    const cacheKey = "flipscan:vinted:v2:" + (branded ? "b:" : "") + query.toLowerCase();
+    const cacheKey = "flipscan:vinted:v3:" + (branded ? "b:" : "") + query.toLowerCase();
     try { const cached = await redis(["GET", cacheKey]); if (cached) return res.status(200).json(JSON.parse(cached)); }
     catch (e) { console.error("vinted cache read", e.message); }
 
