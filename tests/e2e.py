@@ -108,12 +108,13 @@ def cond_mult(c):
     m = CONDMULT.get(str(c or "").lower())
     return 1.0 if m is None else m
 
-# Part A #2: drop duplicate words (keep first) so overlapping fields don't repeat.
+# Part A #2: drop duplicate words (keep first) + stop-words so a hedged item_type can't leak "or".
+_QUERY_STOP = {"or", "and", "with", "the", "a", "an", "of"}
 def dedupe_words(s):
     seen, out = set(), []
     for w in str(s).split():
         k = w.lower()
-        if k in seen:
+        if k in _QUERY_STOP or k in seen:
             continue
         seen.add(k); out.append(w)
     return " ".join(out)
@@ -210,7 +211,7 @@ def validate_scan(resp):
     d = resp["json"]; idn = d.get("identity") or {}
     add("brand_present", (idn.get("brand") or "").strip(), idn.get("brand"))
     add("item_type_present", (idn.get("item_type") or "").strip(), idn.get("item_type"))
-    add("condition_present", "condition_notes" in idn, idn.get("condition_notes"))
+    add("condition_present", str(idn.get("condition") or "").lower() in ("like new", "good", "fair", "poor"), idn.get("condition"))
     est = idn.get("estimated_resale_eur") or {}
     lo, hi = est.get("low"), est.get("high")
     add("estimate_lo_le_hi", num(lo) and num(hi) and lo > 0 and hi > 0 and lo <= hi, "%s..%s" % (lo, hi))

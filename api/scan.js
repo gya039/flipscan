@@ -56,7 +56,9 @@ const RULES =
 5. CONDITION: creases, shadows and folds are NOT flaws. Only flag stains, holes, pilling or fading you can clearly see.
 6. MATERIAL: don't assert silk, leather, wool or real fur from looks alone — satin polyester mimics silk, PU mimics leather, faux mimics fur. Say "looks like X" or defer to the label.
 7. IGNORE the background, hanger, mannequin, hands and reflections — identify only the garment.
-8. If the type or brand is genuinely ambiguous, describe what you can see and set "confidence" to "low" rather than guess.`;
+8. If the type or brand is genuinely ambiguous, describe what you can see and set "confidence" to "low" rather than guess.
+9. COMMIT to ONE item_type. Never write "X or Y" (e.g. "gilet or sleeveless jacket") — pick the single most likely type. Hedging with "or" is treated as low confidence.
+10. FOOTBALL/SPORTS SHIRTS: only call it a "football shirt" and fill "club"/"season" when you can actually SEE a club crest, badge or shirt sponsor. If there's no visible crest/sponsor, use item_type "football-style top" and leave club/season empty — a plain sporty top must NOT be priced against real club shirts.`;
 
 const IDENTITY_TOOL = {
   name: "report_item",
@@ -65,7 +67,7 @@ const IDENTITY_TOOL = {
     type: "object",
     properties: {
       brand: { type: "string", description: "Maker from the neck/care label, or 'unknown'. NOT a printed graphic." },
-      item_type: { type: "string", description: "e.g. 'long-sleeve floral top','track jacket'. Include sleeve length for tops when visible." },
+      item_type: { type: "string", description: "ONE garment type, e.g. 'long-sleeve floral top','track jacket'. Include sleeve length for tops when visible. Never hedge with 'X or Y'. For a sporty top with NO visible club crest/sponsor use 'football-style top' (not 'football shirt')." },
       era: { type: "string", description: "'1990s','Y2K','2000s','unknown', or 'modern repro?'." },
       key_features: { type: "string", description: "Pattern, notable details, any printed graphic (colour goes in 'colour')." },
       colour: { type: "string", description: "Main colour(s), lowercase, 1-3 words, e.g. 'black','mustard yellow','navy'. '' if unclear." },
@@ -97,10 +99,12 @@ const IDENTITY_TOOL = {
 // known) + colour + material + item_type — so the same fields always give the same query,
 // and editing a field re-derives it. No free-text from the model.
 // Part A #2: drop duplicate words (case-insensitive, keep first) so fields that overlap don't
-// produce "denim denim" or "leather sherpa-lined leather jacket".
+// produce "denim denim" or "leather sherpa-lined leather jacket". Also drop stop-words so a
+// hedged item_type ("gilet or sleeveless jacket") can't leak "or"/"and" into the search.
+const QUERY_STOP = new Set(["or", "and", "with", "the", "a", "an", "of"]);
 function dedupeWords(s) {
   const seen = new Set(), out = [];
-  for (const w of String(s).split(/\s+/)) { if (!w) continue; const k = w.toLowerCase(); if (seen.has(k)) continue; seen.add(k); out.push(w); }
+  for (const w of String(s).split(/\s+/)) { if (!w) continue; const k = w.toLowerCase(); if (QUERY_STOP.has(k) || seen.has(k)) continue; seen.add(k); out.push(w); }
   return out.join(" ");
 }
 const brandOf = (id) => (id.brand && String(id.brand).toLowerCase() !== "unknown") ? id.brand : "";
@@ -163,20 +167,24 @@ async function callModel(model, imgBlocks, text) {
   if (!block || !block.input) throw new StageError("identify_failed", "no tool_use block in reply");
   return block.input;
 }
+const hedged = (id) => / or /i.test(String(id.item_type || "")); // "X or Y" = a hedge between two types
+
 function finaliseId(id, model) {
   id.estimated_resale_eur = cleanEstimate(id.estimated_resale_eur);
   const pt = Number(id.price_tag_eur);
   id.price_tag_eur = (isFinite(pt) && pt > 0 && pt < 100000) ? Math.round(pt * 100) / 100 : null; // sanitise
-  id.search_query = buildQuery(id);   // fix #4: deterministic, not model free-text
+  for (const k of ["club", "season", "home_away", "player"]) id[k] = String(id[k] || "").trim();
+  // #3: a football/sports top with NO visible crest/sponsor must NOT be priced against real
+  // club shirts — call it a "football-style top" so comps don't pull in club kits.
+  if (isFootball(id) && !id.club && !id.season) {
+    id.item_type = "football-style top";
+    id.notes = ("no crest/sponsor visible — treated as a football-style top, not a club shirt. " + (id.notes || "")).trim().slice(0, 200);
+    if (String(id.confidence || "").toLowerCase() === "high") id.confidence = "medium";
+  }
+  id.search_query = buildQuery(id);   // fix #4: deterministic (built AFTER the type is normalised)
   const cond = String(id.condition || "").toLowerCase().trim();
   id.condition = ["like new", "good", "fair", "poor"].includes(cond) ? cond : "good"; // Part A #1: default used clothing to 'good'
   id.condition_reason = String(id.condition_reason || "").trim().slice(0, 120);
-  // #3: football shirt with no readable crest — flag it and don't claim high confidence.
-  for (const k of ["club", "season", "home_away", "player"]) id[k] = String(id[k] || "").trim();
-  if (isFootball(id) && !id.club) {
-    id.notes = ("club unknown, check crest. " + (id.notes || "")).trim().slice(0, 200);
-    if (String(id.confidence || "").toLowerCase() === "high") id.confidence = "medium";
-  }
   id.model_used = model;
   return id;
 }
@@ -193,6 +201,8 @@ For "estimated_resale_eur", give the realistic secondhand price on ${platform} f
 Call the report_item tool with your assessment.`;
 
   const id = await callModel(MODEL, imgBlocks, text);
+  // #4: an "X or Y" item_type is a hedge — treat as low confidence so escalation forces a commit.
+  if (hedged(id)) id.confidence = "low";
   // fix #5: if the default model is UNSURE, re-run identification once on a stronger model.
   if (String(id.confidence || "").toLowerCase() === "low" && ESCALATION_MODEL) {
     try {

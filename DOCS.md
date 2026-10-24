@@ -436,6 +436,16 @@ On a comps failure it is `{ error: "comps_failed" }`; with no eBay keys it is `n
   4. **"Why these comps"** line under each source: the exact query sent and **kept N of M**.
   5. Harness check **`comps_match_item_type_<src>`**: ≥70% of a source's displayed comps must
      share the item's type. (Drop the Nike shot into `research/test-photos/` to add it as a case.)
+- **v2.8** — **Hedged IDs + crestless football tops:**
+  1. Query builders strip stop-words (`or`/`and`/`with`/…) so a hedged item_type can't leak
+     "or" into the search (`"...gilet or sleeveless..."` → clean) (scan.js + index.html + harness).
+  2. An **"X or Y" item_type is treated as low confidence**, so escalation fires and the
+     stronger model must commit to one type. The schema/prompt also forbid hedging.
+  3. A football/sports top with **no visible crest/sponsor** is normalised to item_type
+     **"football-style top"** (not "football shirt") so its comps don't pull real club kits;
+     `club`/`season` are only used when a crest/badge is actually visible.
+  4. Harness `condition_present` now checks the graded `condition` field (not `condition_notes`),
+     so a flawless "like new" item no longer fails it.
 - **v2.4** — **Broad-match caution (one commit):** a price built off a broadened query is a
   looser signal, so the app now treats it with care.
   1. **Price off the lower.** When the driving source came from a **broadened** query (not

@@ -442,7 +442,8 @@ function compExamples(list, domain){ return (list||[]).map(ex=>({ price: ex.pric
 const CONDMULT={"like new":1,"good":0.9,"fair":0.75,"poor":0.6};
 function condMult(c){ const m=CONDMULT[String(c||"").toLowerCase()]; return (m==null)?1:m; }
 // Part A #2: drop duplicate words (keep first) so overlapping fields don't repeat ("denim denim").
-function dedupeWords(s){ const seen=new Set(),out=[]; for(const w of String(s).split(/\s+/)){ if(!w) continue; const k=w.toLowerCase(); if(seen.has(k)) continue; seen.add(k); out.push(w);} return out.join(" "); }
+const QUERY_STOP=new Set(["or","and","with","the","a","an","of"]);
+function dedupeWords(s){ const seen=new Set(),out=[]; for(const w of String(s).split(/\s+/)){ if(!w) continue; const k=w.toLowerCase(); if(QUERY_STOP.has(k)||seen.has(k)) continue; seen.add(k); out.push(w);} return out.join(" "); }
 function isFootballType(t){ return /\b(football|soccer|jersey|kit)\b/i.test(String(t||"")); } // #3
 function queryLevels(id){
   const brand=(id.brand&&id.brand.toLowerCase()!=="unknown")?id.brand:"";
