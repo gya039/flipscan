@@ -411,6 +411,14 @@ On a comps failure it is `{ error: "comps_failed" }`; with no eBay keys it is `n
      reported per group; `--only` takes comma-separated substrings; `--offline <dir>`
      recomputes driver/MaxBuy/verdict from a run's saved raw JSON with no API calls; and
      result-screen shots embed as base64 so the report is self-contained.
+- **v2.6** — **Condition grading tightened + overrulable at the rail:**
+  1. The `condition` grade now treats **any** heavy fading, pilling, stains, holes or visible
+     damage as **`poor`** (not `fair`); `fair` is light wear only.
+  2. The identify tool returns a one-line **`condition_reason`**, shown under the condition
+     note (e.g. "heavy fading across the front").
+  3. The grade on the result is **tappable** — cycles like new → good → fair → poor and
+     re-applies the multiplier to Max Buy live, so Alex can overrule the AI. The overridden
+     grade + multiplier + reason are what get logged.
 - **v2.4** — **Broad-match caution (one commit):** a price built off a broadened query is a
   looser signal, so the app now treats it with care.
   1. **Price off the lower.** When the driving source came from a **broadened** query (not

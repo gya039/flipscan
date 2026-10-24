@@ -70,7 +70,8 @@ const IDENTITY_TOOL = {
       material: { type: "string", description: "Main material if clear, lowercase, one word, e.g. 'leather','denim','wool','nylon','cotton'. '' if unsure." },
       size: { type: "string", description: "Only if readable on the label, else 'unknown'." },
       condition_notes: { type: "string", description: "Visible flaws only (stains/holes/pilling/fading)." },
-      condition: { type: "string", enum: ["like new", "good", "fair", "poor"], description: "Overall wear grade from the photos: 'like new' (no visible wear), 'good' (light wear, no flaws), 'fair' (visible wear/light flaws), 'poor' (heavy fading, stains, holes or damage)." },
+      condition: { type: "string", enum: ["like new", "good", "fair", "poor"], description: "Overall wear grade from the photos. 'like new' = no visible wear. 'good' = minimal wear, no flaws. 'fair' = LIGHT wear only (slight creasing, minor bobbling). 'poor' = ANY heavy fading, pilling, stains, holes or visible damage — if you can see fading/pilling/stains/holes/damage, grade it 'poor', not 'fair'." },
+      condition_reason: { type: "string", description: "One short plain line explaining the condition grade from what's visible, e.g. 'heavy fading across the front' or 'clean, only light creasing'. Everyday words." },
       notes: { type: "string", description: "One short, plain line like a mate would say — what makes it worth money, or what to double-check. Everyday words only; NO marketing speak (avoid 'appeals to buyers', 'nostalgia', 'sought-after', 'coveted')." },
       authenticity_flags: { type: "string", description: "Short note if anything looks fake/bootleg, else 'none'." },
       price_tag_eur: { type: ["number", "null"], description: "ONLY if a shop/charity/thrift PRICE STICKER or hand-written price tag is clearly VISIBLE on the item in the photo, the number on it, in EUR (convert from £/$ at a rough rate if needed). This is what it costs to BUY, not a size or product code. If no price tag is clearly readable, use null. Never guess a price here." },
@@ -153,6 +154,7 @@ function finaliseId(id, model) {
   id.search_query = buildQuery(id);   // fix #4: deterministic, not model free-text
   const cond = String(id.condition || "").toLowerCase().trim();
   id.condition = ["like new", "good", "fair", "poor"].includes(cond) ? cond : "good"; // Part A #1: default used clothing to 'good'
+  id.condition_reason = String(id.condition_reason || "").trim().slice(0, 120);
   id.model_used = model;
   return id;
 }

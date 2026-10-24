@@ -199,7 +199,10 @@
   .drivernote{font-family:var(--mono);font-size:12px;color:var(--faint);letter-spacing:.04em;margin-top:16px}
   .drivernote:empty{display:none}
   .disagree{align-items:center;gap:8px;margin-top:10px;background:#2f2713;color:var(--warn);border-radius:12px;padding:10px 12px;font-size:13px;line-height:1.4}
-  .condnote{align-items:center;gap:8px;margin-top:10px;background:#2f2713;color:var(--warn);border-radius:12px;padding:10px 12px;font-size:13px;line-height:1.4}
+  .condnote{margin-top:10px;background:#2f2713;color:var(--warn);border-radius:12px;padding:10px 12px;font-size:13px;line-height:1.5}
+  .condnote .condgrade{cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px}
+  .condnote .condtap{color:var(--faint);font-size:11px;margin-left:4px}
+  .condnote .condreason{color:var(--muted);font-size:12px;margin-top:3px;font-style:italic}
   .paycard{margin-top:10px}
   .thinbadge{display:flex;align-items:center;gap:7px;margin-top:10px;color:var(--warn);font-size:12px}
   .vintedline{font-size:12px;color:var(--teal);margin-top:10px;line-height:1.45}
@@ -515,7 +518,8 @@ function renderCard(data, el, n, img){
 
   let viewed="asking";
   let resaleEur=null, basis="", cur="EUR", priceSource="AI", bandLow=null, bandHigh=null;
-  const condGrade=String(id.condition||"good").toLowerCase(), cmult=condMult(condGrade); // Part A #1
+  let condGrade=String(id.condition||"good").toLowerCase(); // Part A #1 — overrulable at the rail
+  const condReason=String(id.condition_reason||"").trim(), CONDORDER=["like new","good","fair","poor"];
 
   let extra="";
   if(id.notes) extra += `<div class="rnote">${esc(id.notes)}</div>`;
@@ -645,10 +649,18 @@ function renderCard(data, el, n, img){
         if(next && next.mid!=null) resaleEur = Math.min(base.mid, next.mid);
       }
       // Part A #1: knock the driving price down for visible wear before Max Buy / verdict.
-      if(resaleEur!=null && cmult<1) resaleEur = resaleEur*cmult;
+      const cm=condMult(condGrade); if(resaleEur!=null && cm<1) resaleEur = resaleEur*cm;
     } else resaleEur=null;
     const dn=el.querySelector(".drivernote"), dis=el.querySelector(".disagree"), vl=el.querySelector(".vintedline"), cn=el.querySelector(".condnote");
-    if(cn){ if(base && cmult<1){ cn.innerHTML=`${warnMini()} −${Math.round((1-cmult)*100)}% for wear · ${esc(condGrade)} condition`; cn.style.display="flex"; } else cn.style.display="none"; }
+    if(cn){
+      if(base){
+        const cm=condMult(condGrade), pct=Math.round((1-cm)*100);
+        const head = cm<1 ? `−${pct}% for wear · <b class="condgrade">${esc(condGrade)}</b>` : `No wear discount · <b class="condgrade">${esc(condGrade)}</b>`;
+        cn.innerHTML = `<div>${warnMini()} ${head} <span class="condtap">tap to change</span></div>${condReason?`<div class="condreason">“${esc(condReason)}”</div>`:""}`;
+        cn.style.display="block";
+        const g=cn.querySelector(".condgrade"); if(g) g.onclick=()=>{ condGrade=CONDORDER[(CONDORDER.indexOf(condGrade)+1)%CONDORDER.length]; rebase(); };
+      } else cn.style.display="none";
+    }
     if(base){ const u=base.key==="sold"?"sales":base.key==="vinted"?"listings":"comps"; let t=base.isEstimate?"Priced off the AI estimate — no solid comps yet":`Priced off ${base.label}${base.count?` · ${base.countLabel||base.count} ${u}`:""}`; if(broadCautious) t+=" · Broad match — priced cautiously"; dn.textContent=t; dn.style.display="block"; }
     else dn.style.display="none";
     // disagreement among TRUSTED sources — informational only, doesn't move the driver
@@ -747,7 +759,7 @@ function renderCard(data, el, n, img){
       const record = { brand:id.brand, item_type:id.item_type, era:id.era, confidence:id.confidence, model_used:id.model_used,
         basis, price_source: priceSource, est_eur: resaleEur!=null?Math.round(resaleEur):null,
         band_low: bandLow!=null?Math.round(bandLow):null, band_high: bandHigh!=null?Math.round(bandHigh):null,
-        condition: condGrade, condition_mult: cmult,
+        condition: condGrade, condition_mult: condMult(condGrade), condition_reason: condReason,
         paid: isFinite(paid)?paid:null, logged_at: new Date().toISOString().slice(0,10), bought:true };
       const r = await fetch("/api/log",{ method:"POST", headers:{ "content-type":"application/json", "x-flipscan-secret":getSecret() }, body: JSON.stringify({ action:"save", record }) });
       if(r.status===401){ localStorage.removeItem("flipscan_secret"); throw new Error("Access code rejected — scan again to re-enter."); }
