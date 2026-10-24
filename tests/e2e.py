@@ -121,6 +121,42 @@ def dedupe_words(s):
 def is_football_type(t):
     return bool(re.search(r"\b(football|soccer|jersey|kit)\b", str(t or ""), re.I))
 
+# #5: compact mirror of lib/relevance.js — just enough to check an example shares the item TYPE.
+_PY_CATS = [
+    ("football_shirt", ["football", "soccer", "jersey", "kit"], ["shirt", "jersey", "top", "kit", "tee", "tshirt"],
+     ["dress", "cami", "camisole", "shorts", "jacket", "coat", "blazer", "bomber", "jeans", "trousers", "trouser", "skirt", "hoodie", "sweatshirt", "jumper", "sweater", "cardigan"]),
+    ("shorts", ["shorts"], ["shorts"], ["dress", "jersey", "jacket", "coat", "jeans", "trousers", "skirt", "jumper", "sweatshirt", "hoodie", "cardigan", "blouse"]),
+    ("jeans", ["jeans", "denim", "trouser", "trousers", "pants", "chino", "chinos", "cargo", "jogger", "joggers", "legging", "leggings"],
+     ["jeans", "denim", "trousers", "trouser", "pants", "chino", "chinos", "cargo", "cargos", "jogger", "joggers", "legging", "leggings"],
+     ["dress", "jersey", "jacket", "coat", "skirt", "shorts", "hoodie", "sweatshirt", "jumper", "blouse"]),
+    ("jacket", ["jacket", "coat", "blazer", "bomber", "gilet", "parka", "anorak", "windbreaker", "overcoat"],
+     ["jacket", "coat", "blazer", "bomber", "gilet", "parka", "anorak", "windbreaker", "overcoat"],
+     ["dress", "jersey", "jeans", "trousers", "skirt", "shorts", "blouse"]),
+    ("knit", ["jumper", "sweatshirt", "sweater", "hoodie", "pullover", "cardigan", "fleece", "crewneck"],
+     ["jumper", "sweatshirt", "sweater", "hoodie", "pullover", "cardigan", "fleece", "crewneck", "sweat"],
+     ["dress", "jeans", "trousers", "skirt", "shorts", "jacket", "coat", "blazer"]),
+    ("dress", ["dress", "gown", "frock"], ["dress", "gown", "frock"],
+     ["shirt", "jersey", "jeans", "trousers", "jacket", "coat", "shorts", "skirt", "jumper", "hoodie", "sweatshirt", "blazer", "cami"]),
+    ("skirt", ["skirt"], ["skirt"], ["jeans", "trousers", "dress", "jersey", "jacket", "coat", "shorts", "jumper", "hoodie", "sweatshirt"]),
+    ("cami", ["cami", "camisole"], ["cami", "camisole", "tank", "vest"],
+     ["jeans", "trousers", "jacket", "coat", "dress", "shorts", "skirt", "jumper", "hoodie", "sweatshirt", "jersey"]),
+    ("shirt", ["shirt", "blouse", "polo", "tee", "top"], ["shirt", "blouse", "polo", "tee", "tshirt", "top"],
+     ["dress", "jeans", "trousers", "jacket", "coat", "shorts", "skirt", "jumper", "hoodie", "sweatshirt", "cardigan"]),
+]
+def _py_norm(s): return " " + re.sub(r"\s+", " ", re.sub(r"[^a-z0-9]+", " ", str(s or "").lower())).strip() + " "
+def _py_word(ns, tok): return (" " + tok + " ") in ns
+def py_classify(item_type):
+    t = _py_norm(item_type)
+    for cat in _PY_CATS:
+        if any(_py_word(t, k) for k in cat[1]):
+            return cat
+    return None
+def py_shares_type(title, cat):
+    if not cat:
+        return True  # couldn't classify the item -> can't judge, don't penalise
+    t = _py_norm(title)
+    return any(_py_word(t, w) for w in cat[2]) and not any(_py_word(t, w) for w in cat[3])
+
 def query_levels(idn):
     brand = idn.get("brand", "") if (idn.get("brand", "").lower() != "unknown") else ""
     def j(a): return dedupe_words(" ".join(x.strip() for x in a if x and x.strip()))[:80]
@@ -633,6 +669,18 @@ def main():
         vc = (row.get("_vinted_raw") or {}).get("count") or 0
         if 0 < vc < 8:
             row["checks"].append(("vinted_not_thin", False, "Vinted count %d (<8) — too thin to trust if it drives Max Buy" % vc))
+
+        # #5: at least 70% of each source's DISPLAYED comps must share the item's type.
+        cat = py_classify(idn.get("item_type"))
+        for src, rawsrc in (("asking", comps), ("sold", row.get("_sold_raw")), ("vinted", row.get("_vinted_raw"))):
+            if not rawsrc or rawsrc.get("error"):
+                continue
+            titles = [e.get("title", "") for e in (rawsrc.get("examples") or []) if e.get("title")]
+            if len(titles) >= 3:
+                match = sum(1 for tt in titles if py_shares_type(tt, cat))
+                frac = match / len(titles)
+                row["checks"].append(("comps_match_item_type_%s" % src, frac >= 0.70,
+                                      "%d/%d displayed comps share item type (%.0f%%)" % (match, len(titles), frac * 100)))
 
         # truth comparison
         tr = truth.get(fn)

@@ -419,6 +419,23 @@ On a comps failure it is `{ error: "comps_failed" }`; with no eBay keys it is `n
   3. The grade on the result is **tappable** — cycles like new → good → fair → poor and
      re-applies the multiplier to Max Buy live, so Alex can overrule the AI. The overridden
      grade + multiplier + reason are what get logged.
+- **v2.7** — **Comp relevance (a Nike shirt was being priced off a cami/jacket/dresses):**
+  1. **Relevance filter on every source** (`lib/relevance.js`, shared by scan/comps/sold/vinted):
+     a comp counts only if its title carries the **brand** (when known) **and** the **garment
+     type** (with synonyms), and names **no** obviously different garment. Pricing, count and
+     confidence are recomputed from the kept comps; if fewer than the minimum survive the
+     source is thin and can't drive. eBay image-match now has to clear the same filter — an
+     image match that returns dresses no longer wins.
+  2. **Vinted** can filter by `catalog[]` / `brand_ids[]` via Vinted URLs in the actor's
+     `startUrls` (the actor has no input field for them). IDs are supplied through
+     `VINTED_CATALOG_IDS` / `VINTED_BRAND_IDS` env JSON (read off a filtered Vinted URL);
+     without them it falls back to keyword search. Relevance filter always applies after.
+  3. **Football/sports shirts** gained `club`, `season`, `home_away`, `player` fields; the
+     query leads with **club + season + brand**. No readable crest → "club unknown, check
+     crest" and confidence capped at medium.
+  4. **"Why these comps"** line under each source: the exact query sent and **kept N of M**.
+  5. Harness check **`comps_match_item_type_<src>`**: ≥70% of a source's displayed comps must
+     share the item's type. (Drop the Nike shot into `research/test-photos/` to add it as a case.)
 - **v2.4** — **Broad-match caution (one commit):** a price built off a broadened query is a
   looser signal, so the app now treats it with care.
   1. **Price off the lower.** When the driving source came from a **broadened** query (not
