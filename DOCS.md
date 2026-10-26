@@ -456,6 +456,19 @@ On a comps failure it is `{ error: "comps_failed" }`; with no eBay keys it is `n
   3. `research/test-photos/truth.csv` gains a `club` column and the photo-7 row (Nike,
      football-style top, club none); harness check **`club_empty_when_truth_none`** fails if
      the AI names a club the truth says isn't there.
+- **v3.0** — **Generic LLM relevance judge (replaces hand-written categories):**
+  1. After each source's comps come back, the endpoint runs **universal code filters** (brand must
+     appear when known; drop bundles/job-lots/multipacks; price sanity < €1 or > 20× raw median),
+     then **one Haiku call** (`lib/judge.js`) asks "which of these titles are the same KIND of item
+     to price against?" — same garment type + market tier; drops different types, club kits when the
+     item has no club, kids' sizes, bundles, accessories. Prices come only from the survivors.
+  2. Works for any item (football tops, Barbour, Y2K corsets) with **no rules to maintain**. ~1 Haiku
+     call per source (hidden in that source's existing load), **cached 24h** by (source, id, titles).
+  3. The hand-coded category map (`lib/relevance.js`) is kept **only as the fallback** if the judge
+     fails/times out (6s). The per-source category check was removed from the harness.
+  4. Oversight is the **"kept N of M"** line + the judge's **3-word drop reasons** (shown in-app and
+     printed per source by the harness, which also reports the judge's added latency + token cost).
+     If a scan shows junk, the fix goes in the judge's prompt, not a new category.
 - **v2.4** — **Broad-match caution (one commit):** a price built off a broadened query is a
   looser signal, so the app now treats it with care.
   1. **Price off the lower.** When the driving source came from a **broadened** query (not
