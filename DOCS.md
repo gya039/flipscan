@@ -446,6 +446,16 @@ On a comps failure it is `{ error: "comps_failed" }`; with no eBay keys it is `n
      `club`/`season` are only used when a crest/badge is actually visible.
   4. Harness `condition_present` now checks the graded `condition` field (not `condition_notes`),
      so a flawless "like new" item no longer fails it.
+- **v2.9** — **Clubs must be evidence-based (model was hallucinating "Celtic" off stripes):**
+  1. New **`club_evidence`** field — the exact crest/badge/sponsor text actually read. If it's
+     empty the club is forced empty and the item becomes a **"football-style top"**. The prompt
+     spells out that green/white vertical stripes are NOT Celtic (who wear horizontal hoops).
+  2. A named club **never rides at high confidence** (capped at medium), and shows as a
+     tappable **"Club: X (from crest) ✕"** chip — clearing it drops to a football-style top
+     and re-runs the comps (sold/vinted reset to re-pull on the corrected query).
+  3. `research/test-photos/truth.csv` gains a `club` column and the photo-7 row (Nike,
+     football-style top, club none); harness check **`club_empty_when_truth_none`** fails if
+     the AI names a club the truth says isn't there.
 - **v2.4** — **Broad-match caution (one commit):** a price built off a broadened query is a
   looser signal, so the app now treats it with care.
   1. **Price off the lower.** When the driving source came from a **broadened** query (not

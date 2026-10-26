@@ -161,7 +161,7 @@ def py_shares_type(title, cat):
 def query_levels(idn):
     brand = idn.get("brand", "") if (idn.get("brand", "").lower() != "unknown") else ""
     def j(a): return dedupe_words(" ".join(x.strip() for x in a if x and x.strip()))[:80]
-    if is_football_type(idn.get("item_type")) and (idn.get("club") or idn.get("season")):  # #3
+    if is_football_type(idn.get("item_type")) and idn.get("club"):  # #3: named-club shirt
         full = j([idn.get("club", ""), idn.get("season", ""), idn.get("home_away", ""), brand, "football shirt"])
         noSeason = j([idn.get("club", ""), brand, "football shirt"])
         noClub = j([brand, "football shirt"])
@@ -692,6 +692,8 @@ def main():
                                       "truth has brand '%s' but AI said '%s'" % (tr["brand"], idn.get("brand"))))
             if tr.get("item_type"):
                 row["checks"].append(("truth_item_type", tr["item_type"].lower() in (idn.get("item_type", "").lower()), "truth %s vs %s" % (tr["item_type"], idn.get("item_type"))))
+            if str(tr.get("club") or "").strip().lower() == "none":  # #3: club must be empty when there's no real club
+                row["checks"].append(("club_empty_when_truth_none", not str(idn.get("club") or "").strip(), "AI club='%s' (truth: none)" % idn.get("club")))
             if tr.get("sold_price"):
                 sp = float(tr["sold_price"])
                 for src, raw in (("asking", comps), ("sold", row.get("_sold_raw")), ("vinted", row.get("_vinted_raw"))):

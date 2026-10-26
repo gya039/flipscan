@@ -58,7 +58,7 @@ const RULES =
 7. IGNORE the background, hanger, mannequin, hands and reflections — identify only the garment.
 8. If the type or brand is genuinely ambiguous, describe what you can see and set "confidence" to "low" rather than guess.
 9. COMMIT to ONE item_type. Never write "X or Y" (e.g. "gilet or sleeveless jacket") — pick the single most likely type. Hedging with "or" is treated as low confidence.
-10. FOOTBALL/SPORTS SHIRTS: only call it a "football shirt" and fill "club"/"season" when you can actually SEE a club crest, badge or shirt sponsor. If there's no visible crest/sponsor, use item_type "football-style top" and leave club/season empty — a plain sporty top must NOT be priced against real club shirts.`;
+10. FOOTBALL/SPORTS SHIRTS: name a "club" ONLY from a crest, badge or sponsor you can actually READ (put that evidence in "club_evidence"). NEVER infer a club from kit colours or a stripe/hoop pattern — e.g. green-and-white VERTICAL stripes are NOT Celtic (Celtic wear horizontal HOOPS). If you can't read a crest/sponsor, leave club empty and use item_type "football-style top"; a plain sporty top must NOT be priced against real club shirts.`;
 
 const IDENTITY_TOOL = {
   name: "report_item",
@@ -73,7 +73,8 @@ const IDENTITY_TOOL = {
       colour: { type: "string", description: "Main colour(s), lowercase, 1-3 words, e.g. 'black','mustard yellow','navy'. '' if unclear." },
       material: { type: "string", description: "Main material if clear, lowercase, one word, e.g. 'leather','denim','wool','nylon','cotton'. '' if unsure." },
       size: { type: "string", description: "Only if readable on the label, else 'unknown'." },
-      club: { type: "string", description: "FOOTBALL/SPORTS SHIRTS ONLY: the team/club from the crest, sponsor or badge (e.g. 'Celtic', 'Brazil'), or '' if you can't read the crest. Don't guess." },
+      club_evidence: { type: "string", description: "FOOTBALL/SPORTS ONLY: the EXACT text/graphic you can actually READ on a crest, badge or sponsor (e.g. 'Dafabet sponsor', 'club crest with harp'), or '' if none is legible. This is the ONLY basis for naming a club." },
+      club: { type: "string", description: "FOOTBALL/SPORTS ONLY: the club, ONLY if club_evidence names it. NEVER infer a club from kit colours or a stripe/hoop pattern alone (green+white vertical stripes is NOT proof of Celtic). If club_evidence is empty, leave this ''." },
       season: { type: "string", description: "FOOTBALL/SPORTS SHIRTS ONLY: the season if datable from sponsor/kit maker/design, e.g. '2004-05', else ''." },
       home_away: { type: "string", description: "FOOTBALL/SPORTS SHIRTS ONLY: 'home', 'away', 'third', 'goalkeeper' or '' if unclear." },
       player: { type: "string", description: "FOOTBALL/SPORTS SHIRTS ONLY: player name/number printed on the back, else ''." },
@@ -112,15 +113,15 @@ const isFootball = (id) => { const c = classify(id.item_type); return c && c.id 
 const jq = (arr) => dedupeWords(arr.map((x) => String(x || "").trim()).filter(Boolean).join(" ").replace(/\s+/g, " ")).slice(0, 80);
 
 function buildQuery(id) {
-  // #3: football/sports shirts search best on CLUB + SEASON + BRAND, not colour/material.
-  if (isFootball(id) && (id.club || id.season)) return jq([id.club, id.season, id.home_away, brandOf(id), "football shirt"]);
+  // #3: a NAMED-club football shirt searches best on CLUB + SEASON + BRAND, not colour/material.
+  if (isFootball(id) && id.club) return jq([id.club, id.season, id.home_away, brandOf(id), "football shirt"]);
   return jq([brandOf(id), id.colour, id.material, id.item_type]);
 }
 // Decision #2: ordered query levels to broaden a thin search — full → drop material → drop colour.
-// #3: for football shirts, broaden club+season+brand → club+brand → brand instead.
+// #3: for named-club football shirts, broaden club+season+brand → club+brand → brand instead.
 function buildQueryLevels(id) {
   const brand = brandOf(id);
-  if (isFootball(id) && (id.club || id.season)) {
+  if (isFootball(id) && id.club) {
     const out = [{ level: "full", q: jq([id.club, id.season, id.home_away, brand, "football shirt"]) }];
     const noSeason = jq([id.club, brand, "football shirt"]);
     const noClub = jq([brand, "football shirt"]);
@@ -173,14 +174,18 @@ function finaliseId(id, model) {
   id.estimated_resale_eur = cleanEstimate(id.estimated_resale_eur);
   const pt = Number(id.price_tag_eur);
   id.price_tag_eur = (isFinite(pt) && pt > 0 && pt < 100000) ? Math.round(pt * 100) / 100 : null; // sanitise
-  for (const k of ["club", "season", "home_away", "player"]) id[k] = String(id[k] || "").trim();
-  // #3: a football/sports top with NO visible crest/sponsor must NOT be priced against real
-  // club shirts — call it a "football-style top" so comps don't pull in club kits.
-  if (isFootball(id) && !id.club && !id.season) {
+  for (const k of ["club", "season", "home_away", "player", "club_evidence"]) id[k] = String(id[k] || "").trim();
+  // Club must be EVIDENCE-BASED: no legible crest/sponsor text -> no club, full stop.
+  if (!id.club_evidence) id.club = "";
+  // #3: a football/sports top with no named club must NOT be priced against real club shirts —
+  // call it a "football-style top" so comps don't pull in club kits.
+  if (isFootball(id) && !id.club) {
     id.item_type = "football-style top";
-    id.notes = ("no crest/sponsor visible — treated as a football-style top, not a club shirt. " + (id.notes || "")).trim().slice(0, 200);
+    id.notes = ("no club crest/sponsor read — treated as a football-style top, not a club shirt. " + (id.notes || "")).trim().slice(0, 200);
     if (String(id.confidence || "").toLowerCase() === "high") id.confidence = "medium";
   }
+  // A named club is still only a reading — never high confidence on the ID off a crest.
+  if (id.club && String(id.confidence || "").toLowerCase() === "high") id.confidence = "medium";
   id.search_query = buildQuery(id);   // fix #4: deterministic (built AFTER the type is normalised)
   const cond = String(id.condition || "").toLowerCase().trim();
   id.condition = ["like new", "good", "fair", "poor"].includes(cond) ? cond : "good"; // Part A #1: default used clothing to 'good'

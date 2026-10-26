@@ -185,6 +185,8 @@
   .idchip{font-size:12px;padding:3px 9px;border-radius:999px;background:var(--chip);color:var(--muted)}
   .idchip.sure{background:var(--chipg-bg);color:var(--chipg);font-weight:600}
   .idchip.warn{background:#3a3417;color:var(--warn);font-weight:600}
+  .idchip.clubchip{background:#3a3417;color:var(--warn);font-weight:600;cursor:pointer}
+  .idchip.clubchip:active{opacity:.7}
   .rnote{color:var(--muted);font-size:13px;margin-top:12px;line-height:1.5}
   .rflag{display:flex;gap:8px;align-items:flex-start;color:var(--warn);background:#2a2713;border-radius:10px;padding:9px 11px;font-size:13px;margin-top:10px}
   .rnudge{display:flex;gap:8px;align-items:flex-start;color:var(--muted);border:1px dashed var(--line);border-radius:10px;padding:9px 11px;font-size:13px;margin-top:10px}
@@ -448,7 +450,7 @@ function isFootballType(t){ return /\b(football|soccer|jersey|kit)\b/i.test(Stri
 function queryLevels(id){
   const brand=(id.brand&&id.brand.toLowerCase()!=="unknown")?id.brand:"";
   const j=(a)=>dedupeWords(a.map(x=>String(x||"").trim()).filter(Boolean).join(" ").replace(/\s+/g," ")).slice(0,80);
-  if(isFootballType(id.item_type) && (id.club||id.season)){ // #3: club+season+brand first
+  if(isFootballType(id.item_type) && id.club){ // #3: named-club shirt -> club+season+brand first
     const full=j([id.club,id.season,id.home_away,brand,"football shirt"]), noSeason=j([id.club,brand,"football shirt"]), noClub=j([brand,"football shirt"]);
     const out=[{level:"full",q:full}];
     if(noSeason&&noSeason!==full) out.push({level:"no-season",q:noSeason});
@@ -483,6 +485,7 @@ function srcFromComps(id, c){
 }
 function idChipsHtml(id, conf){
   let h = conf==="high"?'<span class="idchip sure">ID sure</span>':conf==="medium"?'<span class="idchip">ID likely</span>':'<span class="idchip warn">ID unsure</span>';
+  if(id.club) h+=`<span class="idchip clubchip" title="Tap to clear if the crest is wrong">Club: ${esc(id.club)} (from crest) ✕</span>`;
   if(id.size&&id.size!=="unknown") h+=`<span class="idchip">size ${esc(id.size)}</span>`;
   if(id.key_features){ const kf=String(id.key_features).split(/[,;]/)[0].trim(); if(kf) h+=`<span class="idchip">${esc(kf.length>22?kf.slice(0,22)+"…":kf)}</span>`; }
   return h;
@@ -706,7 +709,7 @@ function renderCard(data, el, n, img){
   // fix #4: tap the brand / item-type to correct it — re-runs ONLY the comps (not the vision call).
   function clientQuery(){
     const brand=(id.brand&&id.brand.toLowerCase()!=="unknown")?id.brand:"";
-    const parts = (isFootballType(id.item_type) && (id.club||id.season)) ? [id.club,id.season,id.home_away,brand,"football shirt"] : [brand, id.colour, id.material, id.item_type];
+    const parts = (isFootballType(id.item_type) && id.club) ? [id.club,id.season,id.home_away,brand,"football shirt"] : [brand, id.colour, id.material, id.item_type];
     return dedupeWords(parts.map(x=>String(x||"").trim()).filter(Boolean).join(" ").replace(/\s+/g," ")).slice(0,80);
   }
   async function reComps(){
@@ -728,11 +731,21 @@ function renderCard(data, el, n, img){
     el.querySelector(".idsub").textContent = `${id.item_type||""}${id.era&&id.era!=="unknown"?" · "+id.era:""}`;
     reComps();
   }
+  // #2: clear a wrongly-read club — becomes a football-style top and the comps re-run clean.
+  function clearClub(){
+    id.club=""; id.season=""; id.home_away="";
+    if(isFootballType(id.item_type)) id.item_type="football-style top";
+    ["sold","vinted"].forEach(k=>Object.assign(srcs[k], { state:"unfetched", mid:null, low:null, high:null, count:0, countLabel:null, examples:[], queryUsed:null, keptOf:null }));
+    el.querySelector(".idchips").innerHTML = idChipsHtml(id, conf);
+    el.querySelector(".idsub").textContent = `${id.item_type||""}${id.era&&id.era!=="unknown"?" · "+id.era:""}`;
+    viewed="asking"; reComps(); renderValue(); rebase();
+  }
   const brandEl=el.querySelector(".idbrand"), subEl=el.querySelector(".idsub");
   brandEl.classList.add("editable"); brandEl.title="Tap to fix the brand";
   subEl.classList.add("editable"); subEl.title="Tap to fix the item type";
   brandEl.addEventListener("click", ()=>editField("brand","brand"));
   subEl.addEventListener("click", ()=>editField("item_type","item type"));
+  const clubChip=el.querySelector(".clubchip"); if(clubChip) clubChip.addEventListener("click", clearClub);
 
   // (Vinted IE + eBay sold prices are fetched on demand via fetchSource() into the source tabs above.)
 
