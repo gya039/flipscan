@@ -629,14 +629,14 @@ function renderCard(data, el, n, img){
     const label=btn.innerHTML; btn.disabled=true; btn.textContent="Loading…";
     try{
       if(key==="vinted"){
-        const r=await fetch("/api/vinted",{method:"POST",headers:{"content-type":"application/json","x-flipscan-secret":getSecret()},body:JSON.stringify({query, queries:queryLevels(id), branded:!!(id.brand&&id.brand.toLowerCase()!=="unknown"), brand:id.brand, itemType:id.item_type})});
+        const r=await fetch("/api/vinted",{method:"POST",headers:{"content-type":"application/json","x-flipscan-secret":getSecret()},body:JSON.stringify({query, queries:queryLevels(id), branded:!!(id.brand&&id.brand.toLowerCase()!=="unknown"), brand:id.brand, itemType:id.item_type, colour:id.colour, material:id.material, club:id.club, key_features:id.key_features})});
         if(r.status===401){ localStorage.removeItem("flipscan_secret"); throw new Error("Access code rejected — scan again to re-enter."); }
         const d=await r.json(); if(!r.ok||d.error) throw new Error(prettyErr(d.error)||"Vinted lookup failed");
         if(!d.count){ srcs.vinted.state="empty"; srcs.vinted.note="No Vinted listings found."; renderValue(); return; }
         const cc=(d.country||"ie").toUpperCase();
         Object.assign(srcs.vinted,{ state:"ready", country:(d.country||"ie"), mid:d.anchor, low:d.low, high:d.high, count:d.count, confidence:d.confidence, tight:d.tight, queryLevel:d.queryLevel, queryUsed:d.query, keptOf:d.keptOf, basis:`what Vinted ${cc} sellers ask`, priceSource:"Vinted", note:`Vinted ${cc} asking prices${broadenNote(d.queryLevel)}.`, examples:compExamples(d.examples,"vinted."+(d.country||"ie")) });
       } else {
-        const r=await fetch("/api/sold",{method:"POST",headers:{"content-type":"application/json","x-flipscan-secret":getSecret()},body:JSON.stringify({query, queries:queryLevels(id), branded:!!(id.brand&&id.brand.toLowerCase()!=="unknown"), brand:id.brand, itemType:id.item_type})});
+        const r=await fetch("/api/sold",{method:"POST",headers:{"content-type":"application/json","x-flipscan-secret":getSecret()},body:JSON.stringify({query, queries:queryLevels(id), branded:!!(id.brand&&id.brand.toLowerCase()!=="unknown"), brand:id.brand, itemType:id.item_type, colour:id.colour, material:id.material, club:id.club, key_features:id.key_features})});
         if(r.status===401){ localStorage.removeItem("flipscan_secret"); throw new Error("Access code rejected — scan again to re-enter."); }
         const d=await r.json(); if(!r.ok||d.error) throw new Error(prettyErr(d.error)||"sold lookup failed");
         if(!d.count){ srcs.sold.state="empty"; srcs.sold.note="No recent eBay sales found."; renderValue(); return; }
@@ -715,7 +715,7 @@ function renderCard(data, el, n, img){
   async function reComps(){
     const dn=el.querySelector(".drivernote"); const prev=dn.textContent; dn.textContent="Re-checking comps…"; dn.style.display="block";
     try{
-      const r=await fetch("/api/comps",{method:"POST",headers:{"content-type":"application/json","x-flipscan-secret":getSecret()},body:JSON.stringify({queries:queryLevels(id), branded:!!(id.brand&&id.brand.toLowerCase()!=="unknown"), brand:id.brand, itemType:id.item_type})});
+      const r=await fetch("/api/comps",{method:"POST",headers:{"content-type":"application/json","x-flipscan-secret":getSecret()},body:JSON.stringify({queries:queryLevels(id), branded:!!(id.brand&&id.brand.toLowerCase()!=="unknown"), brand:id.brand, itemType:id.item_type, colour:id.colour, material:id.material, club:id.club, key_features:id.key_features})});
       if(r.status===401){ localStorage.removeItem("flipscan_secret"); throw new Error("Access code rejected — scan again."); }
       const c=await r.json(); if(!r.ok||c.error) throw new Error(prettyErr(c.error)||"comps re-check failed");
       srcs.asking = srcFromComps(id, c);

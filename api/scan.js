@@ -3,7 +3,8 @@
 //       -> (optional) filtered eBay comps -> one JSON response { identity, comps }.
 // A comps failure never fails the whole scan. Secrets stay server-side.
 
-import { filterComps, classify } from "../lib/relevance.js";
+import { classify } from "../lib/relevance.js";
+import { judgeFilter } from "../lib/judge.js";
 
 const MODEL = "claude-haiku-4-5-20251001";
 // fix #5: re-run a LOW-confidence identification once on a stronger model. Override the id via
@@ -279,12 +280,9 @@ function cleanPrices(prices) {
   const kept = prices.filter((p) => p >= m * 0.4 && p <= m * 2.5);
   return kept.length >= Math.max(3, Math.ceil(prices.length * 0.5)) ? kept : prices;
 }
-function summarise(items, ccy, market, used, matched, branded, level, idMeta) {
-  // Relevance #1: drop comps whose title doesn't match the item (brand + garment type) BEFORE any maths.
-  const rel = idMeta ? filterComps(items, (i) => i.title, idMeta.brand, idMeta.itemType) : { kept: items, total: items.length, dropped: 0, cat: null };
-  const matchedTotal = rel.total;
-  items = rel.kept;
-  if (!items.length) return { source: matched === "image" ? "eBay image match" : "eBay active listings (asking)", visual: matched === "image", marketplace: market, query: used, count: 0, keptOf: matchedTotal, itemCat: rel.cat, currency: ccy, reliable: false, confidence: "low", tight: false, low: null, anchor: null, median: null, high: null, examples: [] };
+// `items` are already relevance-filtered by the judge; `keptOf` is the raw count before filtering.
+function summarise(items, ccy, market, used, matched, branded, level, keptOf) {
+  if (!items.length) return { source: matched === "image" ? "eBay image match" : "eBay active listings (asking)", visual: matched === "image", marketplace: market, query: used, count: 0, keptOf, currency: ccy, reliable: false, confidence: "low", tight: false, low: null, anchor: null, median: null, high: null, examples: [] };
   let prices = items.map((i) => parseFloat(i.price.value)).sort((a, b) => a - b);
   const rawCount = prices.length;
   if (!branded) prices = cleanPrices(prices);
@@ -310,29 +308,34 @@ function summarise(items, ccy, market, used, matched, branded, level, idMeta) {
   return {
     source: matched === "image" ? "eBay image match (visually similar)" : "eBay active listings (asking)",
     visual: matched === "image", marketplace: market, query: used, branded: !!branded,
-    count: prices.length, rawCount, keptOf: matchedTotal, itemCat: rel.cat, dropped: rawCount - prices.length, currency: ccy, reliable: prices.length >= MIN_COMPS,
+    count: prices.length, rawCount, keptOf, dropped: rawCount - prices.length, currency: ccy, reliable: prices.length >= MIN_COMPS,
     confidence, tight, low, anchor, median, high, examples,
   };
 }
-async function getComps(levels, imageB64, branded, idMeta) {
+async function getComps(levels, imageB64, branded, identity) {
   if (!process.env.EBAY_CLIENT_ID || !process.env.EBAY_CLIENT_SECRET) return null;
   const market = process.env.EBAY_MARKETPLACE || "EBAY_GB";
   const ccy = MARKET_CCY[market] || "GBP";
   const token = await ebayAuth();
-  const imageResult = () => { const s = summarise(imageItems, ccy, market, "(image match)", "image", branded, "image", idMeta); s.queryLevel = "image"; return s; };
+  const getTitle = (i) => i.title, getPrice = (i) => parseFloat(i.price.value);
+  const run = async (items, used, matched, level) => {
+    const jf = await judgeFilter(identity, items, getTitle, getPrice, "asking");
+    const s = summarise(jf.kept, ccy, market, used, matched, branded, level, jf.total);
+    s.queryLevel = level; s.drops = jf.drops; s.judge = jf.judge;
+    return s;
+  };
 
-  // 1) Image search first — matches on how it actually LOOKS, not words.
+  // 1) Image search first — matches on how it actually LOOKS, not words. The judge then
+  // drops any visual match that isn't the same KIND of item (a shirt match that returns dresses).
   let imageItems = [];
   if (imageB64) {
     try { imageItems = await ebaySearchByImage(imageB64, token, market, ccy); }
     catch (e) { console.error("ebay image search:", e.message); }
   }
-  // Relevance #1: image match only wins when enough comps survive the title filter
-  // (an image match of a shirt that returns dresses/camis is NOT good comps).
-  let imgRes = imageItems.length ? imageResult() : null;
+  let imgRes = imageItems.length ? await run(imageItems, "(image match)", "image", "image") : null;
   if (imgRes && imgRes.count >= IMG_MIN) return imgRes;
 
-  // 2) Keyword, broadening on thin: full -> drop material -> drop colour. First with >=MIN wins; else the best.
+  // 2) Keyword, broadening on thin: full -> drop material -> drop colour. First with >=MIN raw wins; else the best.
   let best = null, bestLevel = null, bestQ = "";
   for (const { level, q } of (levels || [])) {
     if (!q) continue;
@@ -340,12 +343,8 @@ async function getComps(levels, imageB64, branded, idMeta) {
     if (!best || items.length > best.length) { best = items; bestLevel = level; bestQ = q; }
     if (items.length >= MIN_COMPS) { best = items; bestLevel = level; bestQ = q; break; }
   }
-  let kwRes = null;
-  if (best && best.length) {
-    kwRes = summarise(best, ccy, market, bestQ, "keyword", branded, bestLevel, idMeta);
-    kwRes.queryLevel = bestLevel;
-  }
-  // Pick whichever yields more RELEVANT comps after the title filter (not raw count).
+  const kwRes = (best && best.length) ? await run(best, bestQ, "keyword", bestLevel) : null;
+  // Pick whichever yields more comps the judge KEPT (not raw count).
   if (kwRes && imgRes) return (imgRes.count >= kwRes.count) ? imgRes : kwRes;
   return kwRes || imgRes || null;
 }
@@ -396,7 +395,7 @@ export default async function handler(req, res) {
     let comps = null;
     try {
       const branded = !!(identity.brand && identity.brand.toLowerCase() !== "unknown");
-      comps = await getComps(buildQueryLevels(identity), parsed[0] && parsed[0].b64, branded, { brand: identity.brand, itemType: identity.item_type });
+      comps = await getComps(buildQueryLevels(identity), parsed[0] && parsed[0].b64, branded, identity);
     } catch (e) {
       console.error("comps error:", e.message);
       comps = { error: "comps_failed" };

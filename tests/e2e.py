@@ -122,6 +122,22 @@ def dedupe_words(s):
 def is_football_type(t):
     return bool(re.search(r"\b(football|soccer|jersey|kit)\b", str(t or ""), re.I))
 
+# --- LLM relevance-judge telemetry (drops + latency + token cost) ---
+JUDGE_AGG = {"ms": 0.0, "in": 0, "out": 0, "calls": 0, "fallback": 0, "cached": 0}
+def note_judge(src):
+    j = (src or {}).get("judge") or {}
+    JUDGE_AGG["calls"] += 1
+    JUDGE_AGG["ms"] += (j.get("ms") or 0); JUDGE_AGG["in"] += (j.get("inTok") or 0); JUDGE_AGG["out"] += (j.get("outTok") or 0)
+    if j.get("fallback"): JUDGE_AGG["fallback"] += 1
+    if j.get("cached"): JUDGE_AGG["cached"] += 1
+    tag = "cached" if j.get("cached") else ("FALLBACK" if j.get("fallback") else "judged")
+    return "%s %dms %di/%do" % (tag, j.get("ms") or 0, j.get("inTok") or 0, j.get("outTok") or 0)
+def drops_str(src, k=5):
+    ds = (src or {}).get("drops") or []
+    if not ds: return ""
+    head = "; ".join("%s(%s)" % (d.get("reason"), str(d.get("title", ""))[:22]) for d in ds[:k])
+    return "    drops: " + head + (" +%d more" % (len(ds) - k) if len(ds) > k else "")
+
 # #5: compact mirror of lib/relevance.js — just enough to check an example shares the item TYPE.
 _PY_CATS = [
     ("football_shirt", ["football", "soccer", "jersey", "kit"], ["shirt", "jersey", "top", "kit", "tee", "tshirt"],
@@ -552,7 +568,8 @@ def main():
         print("  ID brand='%s' item='%s' conf=%s model=%s%s" % (idn.get("brand"), idn.get("item_type"), idn.get("confidence"), idn.get("model_used"),
               (" club='%s' season='%s'" % (idn.get("club"), idn.get("season"))) if idn.get("club") or idn.get("season") else ""))
         if comps and not comps.get("error"):
-            print("  ASKING %s='%s' kept=%s/%s level=%s" % ("image" if comps.get("visual") else "q", comps.get("query"), comps.get("count"), comps.get("keptOf"), comps.get("queryLevel")))
+            print("  ASKING %s='%s' kept=%s/%s level=%s  [%s]" % ("image" if comps.get("visual") else "q", comps.get("query"), comps.get("count"), comps.get("keptOf"), comps.get("queryLevel"), note_judge(comps)))
+            if drops_str(comps): print(drops_str(comps))
 
         # fix #4: same photo scanned twice should produce the SAME (deterministic) search_query
         if not args.no_twice:
@@ -575,7 +592,7 @@ def main():
 
         if not args.no_sold and q:
             sold_body = {"query": q, "queries": query_levels(idn), "branded": is_branded(idn),
-                         "brand": idn.get("brand", ""), "itemType": idn.get("item_type", "")}
+                         "brand": idn.get("brand", ""), "itemType": idn.get("item_type", ""), "colour": idn.get("colour",""), "material": idn.get("material",""), "club": idn.get("club",""), "key_features": idn.get("key_features","")}
             if args.sold_two_level:  # Part B quota cap: full query, then no-colour only (skip no-material)
                 qls = query_levels(idn)
                 sold_body["queries"] = [qls[0]] + ([qls[-1]] if len(qls) > 1 and qls[-1]["level"] != qls[0]["level"] else [])
@@ -586,19 +603,21 @@ def main():
             if med: row["sold_med"] = round(med, 1)
             row["_sold_raw"] = r["json"]
             sj = r["json"]
-            print("  SOLD   q='%s' level=%s kept=%s/%s count=%s%s median=%s anchor=%s" % (sj.get("query"), sj.get("queryLevel"), sj.get("count"), sj.get("keptOf"), sj.get("count"), "+" if sj.get("capped") else "", sj.get("median"), sj.get("anchor")))
+            print("  SOLD   q='%s' level=%s kept=%s/%s median=%s anchor=%s  [%s]" % (sj.get("query"), sj.get("queryLevel"), sj.get("count"), sj.get("keptOf"), sj.get("median"), sj.get("anchor"), note_judge(sj)))
+            if drops_str(sj): print(drops_str(sj))
         if not args.no_vinted and q:
             r = post("/api/vinted", {"query": q, "queries": query_levels(idn), "branded": is_branded(idn),
-                                     "brand": idn.get("brand", ""), "itemType": idn.get("item_type", "")}); endpoint_lat["vinted"].append(r["latency"])
+                                     "brand": idn.get("brand", ""), "itemType": idn.get("item_type", ""), "colour": idn.get("colour",""), "material": idn.get("material",""), "club": idn.get("club",""), "key_features": idn.get("key_features","")}); endpoint_lat["vinted"].append(r["latency"])
             save_raw(outdir, stem + ".vinted", {"query": q, "response": r["json"]})
             ch, med = validate_prices(r, "vinted"); row["checks"] += ch
             row["vinted_med_num"] = med
             if med: row["vinted_med"] = round(med, 1)
             row["_vinted_raw"] = r["json"]
             vj = r["json"]
-            print("  VINTED q='%s' level=%s kept=%s/%s count=%s anchor=%s median=%s country=%s examples=%s" % (
-                vj.get("query"), vj.get("queryLevel"), vj.get("count"), vj.get("keptOf"), vj.get("count"), vj.get("anchor"), vj.get("median"),
-                vj.get("country"), [e.get("price") for e in (vj.get("examples") or [])]))
+            print("  VINTED q='%s' level=%s kept=%s/%s anchor=%s median=%s country=%s  [%s]" % (
+                vj.get("query"), vj.get("queryLevel"), vj.get("count"), vj.get("keptOf"), vj.get("anchor"), vj.get("median"),
+                vj.get("country"), note_judge(vj)))
+            if drops_str(vj): print(drops_str(vj))
         if fn in lens_set:
             r = post("/api/lens", {"image": img}); endpoint_lat["lens"].append(r["latency"]); row["checks"] += validate_lensweb(r, "lens")
             r = post("/api/web", {"image": img}); endpoint_lat["web"].append(r["latency"]); row["checks"] += validate_lensweb(r, "web")
@@ -779,6 +798,15 @@ def main():
         branded = sum(1 for r in grp if str(r.get("brand", "")).lower() not in ("", "unknown"))
         hi = sum(1 for r in grp if r.get("confidence") == "high")
         print("  %-10s n=%d  brand-identified=%d/%d  high-confidence=%d/%d" % (src, len(grp), branded, len(grp), hi, len(grp)))
+
+    # Relevance-judge cost (Haiku ~ $1/Mtok in, $5/Mtok out — approximate).
+    if JUDGE_AGG["calls"]:
+        fresh = JUDGE_AGG["calls"] - JUDGE_AGG["cached"] - JUDGE_AGG["fallback"]
+        cost = JUDGE_AGG["in"] / 1e6 * 1.0 + JUDGE_AGG["out"] / 1e6 * 5.0
+        print("\nRELEVANCE JUDGE: %d source-calls (%d judged, %d cached, %d fallback)" % (JUDGE_AGG["calls"], fresh, JUDGE_AGG["cached"], JUDGE_AGG["fallback"]))
+        print("  added latency: %.0fms total, ~%.0fms per fresh judge call" % (JUDGE_AGG["ms"], (JUDGE_AGG["ms"] / fresh) if fresh else 0))
+        print("  tokens: %d in / %d out  ·  est cost $%.4f total  (~$%.4f / scan over %d photos, ~%.2f c/scan)" % (
+            JUDGE_AGG["in"], JUDGE_AGG["out"], cost, cost / n if n else 0, n, (cost / n * 100) if n else 0))
 
     print("\nout: %s" % outdir)
     print("report: %s" % report)

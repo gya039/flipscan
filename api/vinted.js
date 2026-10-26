@@ -6,7 +6,8 @@
 // so we 30th-percentile anchor the same way. Searches vinted.ie first; if fewer than
 // 8 results, falls back to vinted.fr (both EUR, Vinted is pan-EU so prices compare).
 
-import { filterComps, classify } from "../lib/relevance.js";
+import { classify } from "../lib/relevance.js";
+import { judgeFilter } from "../lib/judge.js";
 
 export const maxDuration = 60; // Apify run-sync can take 20s+; raise Vercel's function ceiling
 
@@ -105,13 +106,9 @@ async function scrapeCountry(query, country, idMeta) {
   }, APIFY_MS);
   if (!r.ok) throw new Error(`apify ${r.status}`);
   const items = await r.json();
-  const raw = (Array.isArray(items) ? items : []).filter(
+  return (Array.isArray(items) ? items : []).filter(   // raw EUR rows; relevance is judged once, below
     (it) => it && it.price && (it.price.currency_code === "EUR" || !it.price.currency_code) && !isNaN(parseFloat(it.price.amount))
   );
-  const rel = idMeta ? filterComps(raw, (it) => it.title || it.brand_title || "", idMeta.brand, idMeta.itemType) : { kept: raw, total: raw.length, cat: null };
-  const rows = rel.kept;
-  rows.rawTotal = rel.total; rows.itemCat = rel.cat; // carried for the "kept N of M" line
-  return rows;
 }
 
 export default async function handler(req, res) {
@@ -150,10 +147,14 @@ export default async function handler(req, res) {
       try { const fr = await scrapeCountry(levels[0].q, "fr", idMeta); if (fr.length > rows.length) { rows = fr; country = "fr"; usedLevel = levels[0].level; usedQ = levels[0].q; } }
       catch (e) { console.error("vinted fr", e.message); }
     }
-    const keptOf = rows.rawTotal != null ? rows.rawTotal : rows.length, itemCat = rows.itemCat || null;
+    // Relevance: one judge pass over the chosen rows (universal code filters, then Haiku).
+    const identity = { brand: body.brand || "", item_type: body.itemType || body.item_type || "", colour: body.colour || "", material: body.material || "", club: body.club || "", key_features: body.key_features || "" };
+    const jf = await judgeFilter(identity, rows, (it) => it.title || it.brand_title || "", (it) => parseFloat(it.price.amount), "vinted");
+    rows = jf.kept;
+    const keptOf = jf.total, drops = jf.drops, judge = jf.judge;
 
     if (!rows.length) {
-      const empty = { source: "Vinted", country, query: usedQ, count: 0, keptOf, itemCat, currency: "EUR", reliable: false, confidence: "low", tight: false, low: null, anchor: null, median: null, high: null, examples: [] };
+      const empty = { source: "Vinted", country, query: usedQ, count: 0, keptOf, drops, judge, currency: "EUR", reliable: false, confidence: "low", tight: false, low: null, anchor: null, median: null, high: null, examples: [] };
       return res.status(200).json(empty);
     }
 
@@ -172,7 +173,7 @@ export default async function handler(req, res) {
       .map((it) => ({ title: it.title || it.brand_title || "Vinted listing", price: `€${Math.round(parseFloat(it.price.amount))}`, url: it.url, image: imgOf(it), condition: it.status || "" }));
 
     const result = {
-      source: "Vinted", country, query: usedQ, branded, queryLevel: usedLevel, count: prices.length, rawCount, keptOf, itemCat, dropped: rawCount - prices.length, currency: "EUR",
+      source: "Vinted", country, query: usedQ, branded, queryLevel: usedLevel, count: prices.length, rawCount, keptOf, drops, judge, dropped: rawCount - prices.length, currency: "EUR",
       reliable: prices.length >= WANT, confidence, tight,
       low, anchor, median, high, examples,
     };

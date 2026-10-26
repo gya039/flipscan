@@ -2,7 +2,7 @@
 // chips on the result screen (fix #4). Keyword eBay search + the same anchoring/cleaning as
 // scan.js. Mirrors scan.js's keyword path; keep the two in sync.
 
-import { filterComps } from "../lib/relevance.js";
+import { judgeFilter } from "../lib/judge.js";
 
 const MIN_COMPS = 8;
 const CLOTHING_CAT = "11450";
@@ -51,12 +51,9 @@ async function ebaySearch(query, token, market, ccy) {
   if (!r.ok) throw new Error(`ebay browse ${r.status}`);
   return okItems(await r.json(), ccy);
 }
-function summarise(items, ccy, market, used, branded, level, idMeta) {
-  // Relevance #1: drop title-mismatched comps before any maths (keep in sync with scan.js).
-  const rel = idMeta ? filterComps(items, (i) => i.title, idMeta.brand, idMeta.itemType) : { kept: items, total: items.length, dropped: 0, cat: null };
-  const matchedTotal = rel.total;
-  items = rel.kept;
-  if (!items.length) return { source: "eBay active listings (asking)", visual: false, marketplace: market, query: used, count: 0, keptOf: matchedTotal, itemCat: rel.cat, currency: ccy, reliable: false, confidence: "low", tight: false, low: null, anchor: null, median: null, high: null, examples: [] };
+// `items` are already relevance-filtered by the judge; `keptOf` is the raw count before filtering.
+function summarise(items, ccy, market, used, branded, level, keptOf) {
+  if (!items.length) return { source: "eBay active listings (asking)", visual: false, marketplace: market, query: used, count: 0, keptOf, currency: ccy, reliable: false, confidence: "low", tight: false, low: null, anchor: null, median: null, high: null, examples: [] };
   let prices = items.map((i) => parseFloat(i.price.value)).sort((a, b) => a - b);
   const rawCount = prices.length;
   if (!branded) prices = cleanPrices(prices);
@@ -67,7 +64,7 @@ function summarise(items, ccy, market, used, branded, level, idMeta) {
   const picked = [...items].sort((a, b) => Math.abs(parseFloat(a.price.value) - anchor) - Math.abs(parseFloat(b.price.value) - anchor)).slice(0, 6);
   const examples = picked.map((i) => ({ title: i.title, price: `${i.price.value} ${i.price.currency}`, url: i.itemWebUrl, image: (i.image && i.image.imageUrl) || null, condition: i.condition || "" }));
   const { tight, confidence } = gradeComps(prices.length, low, median, high);
-  return { source: "eBay active listings (asking)", visual: false, marketplace: market, query: used, branded: !!branded, count: prices.length, rawCount, keptOf: matchedTotal, itemCat: rel.cat, dropped: rawCount - prices.length, currency: ccy, reliable: prices.length >= MIN_COMPS, confidence, tight, low, anchor, median, high, examples };
+  return { source: "eBay active listings (asking)", visual: false, marketplace: market, query: used, branded: !!branded, count: prices.length, rawCount, keptOf, dropped: rawCount - prices.length, currency: ccy, reliable: prices.length >= MIN_COMPS, confidence, tight, low, anchor, median, high, examples };
 }
 
 export default async function handler(req, res) {
@@ -83,7 +80,7 @@ export default async function handler(req, res) {
       : (String(body.query || "").trim() ? [{ level: "full", q: String(body.query).replace(/\s+/g, " ").trim().slice(0, 80) }] : []);
     if (!levels.length) return res.status(400).json({ error: "no_query" });
     const branded = !!body.branded;
-    const idMeta = { brand: body.brand || "", itemType: body.itemType || body.item_type || "" };
+    const identity = { brand: body.brand || "", item_type: body.itemType || body.item_type || "", colour: body.colour || "", material: body.material || "", club: body.club || "", key_features: body.key_features || "" };
     const market = process.env.EBAY_MARKETPLACE || "EBAY_GB";
     const ccy = MARKET_CCY[market] || "GBP";
 
@@ -96,7 +93,9 @@ export default async function handler(req, res) {
       if (items.length >= MIN_COMPS) { best = items; bestLevel = level; bestQ = q; break; }
     }
     if (!best) return res.status(502).json({ error: "comps_failed" });
-    const s = summarise(best, ccy, market, bestQ, branded, bestLevel, idMeta); s.queryLevel = bestLevel;
+    const jf = await judgeFilter(identity, best, (i) => i.title, (i) => parseFloat(i.price.value), "asking");
+    const s = summarise(jf.kept, ccy, market, bestQ, branded, bestLevel, jf.total);
+    s.queryLevel = bestLevel; s.drops = jf.drops; s.judge = jf.judge;
     return res.status(200).json(s);
   } catch (e) {
     console.error("comps handler", e);
