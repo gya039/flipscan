@@ -447,6 +447,7 @@ function condMult(c){ const m=CONDMULT[String(c||"").toLowerCase()]; return (m==
 const QUERY_STOP=new Set(["or","and","with","the","a","an","of"]);
 function dedupeWords(s){ const seen=new Set(),out=[]; for(const w of String(s).split(/\s+/)){ if(!w) continue; const k=w.toLowerCase(); if(QUERY_STOP.has(k)||seen.has(k)) continue; seen.add(k); out.push(w);} return out.join(" "); }
 function isFootballType(t){ return /\b(football|soccer|jersey|kit)\b/i.test(String(t||"")); } // #3
+function searchType(id){ return (id.search_terms&&String(id.search_terms).trim())?String(id.search_terms).trim():(id.item_type||""); } // #2: seller words
 function queryLevels(id){
   const brand=(id.brand&&id.brand.toLowerCase()!=="unknown")?id.brand:"";
   const j=(a)=>dedupeWords(a.map(x=>String(x||"").trim()).filter(Boolean).join(" ").replace(/\s+/g," ")).slice(0,80);
@@ -457,7 +458,8 @@ function queryLevels(id){
     if(noClub&&noClub!==noSeason&&noClub!==full) out.push({level:"no-club",q:noClub});
     return out;
   }
-  const full=j([brand,id.colour,id.material,id.item_type]), noMat=j([brand,id.colour,id.item_type]), noCol=j([brand,id.item_type]);
+  const st=searchType(id);
+  const full=j([brand,id.colour,id.material,st]), noMat=j([brand,id.colour,st]), noCol=j([brand,st]);
   const out=[{level:"full",q:full}];
   if(noMat&&noMat!==full) out.push({level:"no-material",q:noMat});
   if(noCol&&noCol!==noMat&&noCol!==full) out.push({level:"no-colour",q:noCol});
@@ -709,7 +711,7 @@ function renderCard(data, el, n, img){
   // fix #4: tap the brand / item-type to correct it — re-runs ONLY the comps (not the vision call).
   function clientQuery(){
     const brand=(id.brand&&id.brand.toLowerCase()!=="unknown")?id.brand:"";
-    const parts = (isFootballType(id.item_type) && id.club) ? [id.club,id.season,id.home_away,brand,"football shirt"] : [brand, id.colour, id.material, id.item_type];
+    const parts = (isFootballType(id.item_type) && id.club) ? [id.club,id.season,id.home_away,brand,"football shirt"] : [brand, id.colour, id.material, searchType(id)];
     return dedupeWords(parts.map(x=>String(x||"").trim()).filter(Boolean).join(" ").replace(/\s+/g," ")).slice(0,80);
   }
   async function reComps(){

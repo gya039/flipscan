@@ -469,6 +469,13 @@ On a comps failure it is `{ error: "comps_failed" }`; with no eBay keys it is `n
   4. Oversight is the **"kept N of M"** line + the judge's **3-word drop reasons** (shown in-app and
      printed per source by the harness, which also reports the judge's added latency + token cost).
      If a scan shows junk, the fix goes in the judge's prompt, not a new category.
+- **v3.1** — **Judge tuning + search-vs-display split:**
+  1. Judge capped at **60 titles** / **8s** timeout so every source (incl. 100+ sold comps)
+     reliably judges instead of falling back.
+  2. The brand **code filter checks Vinted's `brand_title` field**, not just the listing title,
+     so a Vinted "Black top" whose brand sits in `brand_title` isn't wrongly dropped off-brand.
+  3. New **`search_terms`** field: `item_type` stays the on-screen label (e.g. "football-style
+     top") while queries use the words sellers actually list under (e.g. "football top jersey").
 - **v2.4** — **Broad-match caution (one commit):** a price built off a broadened query is a
   looser signal, so the app now treats it with care.
   1. **Price off the lower.** When the driving source came from a **broadened** query (not

@@ -149,7 +149,9 @@ export default async function handler(req, res) {
     }
     // Relevance: one judge pass over the chosen rows (universal code filters, then Haiku).
     const identity = { brand: body.brand || "", item_type: body.itemType || body.item_type || "", colour: body.colour || "", material: body.material || "", club: body.club || "", key_features: body.key_features || "" };
-    const jf = await judgeFilter(identity, rows, (it) => it.title || it.brand_title || "", (it) => parseFloat(it.price.amount), "vinted");
+    // Vinted carries the brand in `brand_title`, not always the title — pass it so the brand
+    // code-filter checks Vinted's brand field, not just the title.
+    const jf = await judgeFilter(identity, rows, (it) => it.title || it.brand_title || "", (it) => parseFloat(it.price.amount), "vinted", (it) => it.brand_title || "");
     rows = jf.kept;
     const keptOf = jf.total, drops = jf.drops, judge = jf.judge;
 

@@ -155,9 +155,10 @@ def query_levels(idn):
         if noSeason and noSeason != full: out.append({"level": "no-season", "q": noSeason})
         if noClub and noClub != noSeason and noClub != full: out.append({"level": "no-club", "q": noClub})
         return out
-    full = j([brand, idn.get("colour", ""), idn.get("material", ""), idn.get("item_type", "")])
-    noMat = j([brand, idn.get("colour", ""), idn.get("item_type", "")])
-    noCol = j([brand, idn.get("item_type", "")])
+    st = (idn.get("search_terms") or "").strip() or idn.get("item_type", "")  # #2: seller words
+    full = j([brand, idn.get("colour", ""), idn.get("material", ""), st])
+    noMat = j([brand, idn.get("colour", ""), st])
+    noCol = j([brand, st])
     out = [{"level": "full", "q": full}]
     if noMat and noMat != full: out.append({"level": "no-material", "q": noMat})
     if noCol and noCol != noMat and noCol != full: out.append({"level": "no-colour", "q": noCol})

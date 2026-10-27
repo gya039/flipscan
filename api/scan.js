@@ -68,7 +68,8 @@ const IDENTITY_TOOL = {
     type: "object",
     properties: {
       brand: { type: "string", description: "Maker from the neck/care label, or 'unknown'. NOT a printed graphic." },
-      item_type: { type: "string", description: "ONE garment type, e.g. 'long-sleeve floral top','track jacket'. Include sleeve length for tops when visible. Never hedge with 'X or Y'. For a sporty top with NO visible club crest/sponsor use 'football-style top' (not 'football shirt')." },
+      item_type: { type: "string", description: "ONE garment type for DISPLAY, e.g. 'long-sleeve floral top','track jacket'. Include sleeve length for tops when visible. Never hedge with 'X or Y'. For a sporty top with NO visible club crest/sponsor use 'football-style top' (not 'football shirt')." },
+      search_terms: { type: "string", description: "The words RESELLERS actually search/list this item under (2-5 words), which may differ from item_type's display label. E.g. item_type 'football-style top' -> search_terms 'football top jersey'; 'quilted bomber jacket' -> 'quilted bomber jacket'. Do NOT include brand or colour (added separately)." },
       era: { type: "string", description: "'1990s','Y2K','2000s','unknown', or 'modern repro?'." },
       key_features: { type: "string", description: "Pattern, notable details, any printed graphic (colour goes in 'colour')." },
       colour: { type: "string", description: "Main colour(s), lowercase, 1-3 words, e.g. 'black','mustard yellow','navy'. '' if unclear." },
@@ -112,11 +113,13 @@ function dedupeWords(s) {
 const brandOf = (id) => (id.brand && String(id.brand).toLowerCase() !== "unknown") ? id.brand : "";
 const isFootball = (id) => { const c = classify(id.item_type); return c && c.id === "football_shirt"; };
 const jq = (arr) => dedupeWords(arr.map((x) => String(x || "").trim()).filter(Boolean).join(" ").replace(/\s+/g, " ")).slice(0, 80);
+// #2: queries use the SELLER'S words (search_terms) when given, not the display label (item_type).
+const searchType = (id) => (id.search_terms && String(id.search_terms).trim()) ? String(id.search_terms).trim() : (id.item_type || "");
 
 function buildQuery(id) {
   // #3: a NAMED-club football shirt searches best on CLUB + SEASON + BRAND, not colour/material.
   if (isFootball(id) && id.club) return jq([id.club, id.season, id.home_away, brandOf(id), "football shirt"]);
-  return jq([brandOf(id), id.colour, id.material, id.item_type]);
+  return jq([brandOf(id), id.colour, id.material, searchType(id)]);
 }
 // Decision #2: ordered query levels to broaden a thin search — full → drop material → drop colour.
 // #3: for named-club football shirts, broaden club+season+brand → club+brand → brand instead.
@@ -130,9 +133,10 @@ function buildQueryLevels(id) {
     if (noClub && noClub !== noSeason && noClub !== out[0].q) out.push({ level: "no-club", q: noClub });
     return out;
   }
-  const full = jq([brand, id.colour, id.material, id.item_type]);
-  const noMat = jq([brand, id.colour, id.item_type]);
-  const noCol = jq([brand, id.item_type]);
+  const st = searchType(id);
+  const full = jq([brand, id.colour, id.material, st]);
+  const noMat = jq([brand, id.colour, st]);
+  const noCol = jq([brand, st]);
   const out = [{ level: "full", q: full }];
   if (noMat && noMat !== full) out.push({ level: "no-material", q: noMat });
   if (noCol && noCol !== noMat && noCol !== full) out.push({ level: "no-colour", q: noCol });
@@ -187,6 +191,7 @@ function finaliseId(id, model) {
   }
   // A named club is still only a reading — never high confidence on the ID off a crest.
   if (id.club && String(id.confidence || "").toLowerCase() === "high") id.confidence = "medium";
+  id.search_terms = String(id.search_terms || "").replace(/\s+/g, " ").trim().slice(0, 60); // #2: seller words for the query
   id.search_query = buildQuery(id);   // fix #4: deterministic (built AFTER the type is normalised)
   const cond = String(id.condition || "").toLowerCase().trim();
   id.condition = ["like new", "good", "fair", "poor"].includes(cond) ? cond : "good"; // Part A #1: default used clothing to 'good'
