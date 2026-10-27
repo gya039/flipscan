@@ -18,6 +18,11 @@ the ORIGINAL bytes base64-encoded. Photos over ~2.6MB (MAX_IMG_CHARS) are flagge
 import os, sys, io, json, base64, csv, time, ssl, math, argparse, datetime, html, re
 import urllib.request, urllib.error
 
+# Comp titles can contain emoji/non-cp1252 chars; keep Windows stdout from crashing on them.
+for _s in (sys.stdout, sys.stderr):
+    try: _s.reconfigure(encoding="utf-8", errors="replace")
+    except Exception: pass
+
 ROOT   = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))   # .../flipscan
 PHOTOS = os.path.join(ROOT, "research", "test-photos")
 TRUTH  = os.path.join(PHOTOS, "truth.csv")

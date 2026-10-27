@@ -127,7 +127,7 @@ export default async function handler(req, res) {
     idMeta.cat = (classify(idMeta.itemType) || {}).id || null; // for the catalog[] filter (#2)
 
     // 24h cache (per query + branded flag) to keep Apify spend down.
-    const cacheKey = "flipscan:vinted:v3:" + (branded ? "b:" : "") + query.toLowerCase();
+    const cacheKey = "flipscan:vinted:v4:" + (branded ? "b:" : "") + query.toLowerCase();
     try { const cached = await redis(["GET", cacheKey]); if (cached) return res.status(200).json(JSON.parse(cached)); }
     catch (e) { console.error("vinted cache read", e.message); }
 
